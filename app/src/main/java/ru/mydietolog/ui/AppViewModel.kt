@@ -11,6 +11,8 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
+import ru.mydietolog.data.DayMarks
+import ru.mydietolog.data.DayMarksRepository
 import ru.mydietolog.data.Dish
 import ru.mydietolog.data.Exporter
 import ru.mydietolog.data.MAX_PHOTOS_PER_DISH
@@ -102,9 +104,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
 
     val repo = Repository(app)
     val workoutRepo = WorkoutRepository(app)
+    val marksRepo = DayMarksRepository(app)
     private val exporter = Exporter(app, repo)
 
     val meals = repo.meals
+    val marks = marksRepo.marks
     val workouts = WorkoutController(workoutRepo, viewModelScope, this)
 
     var tab by mutableStateOf(MainTab.DIARY)
@@ -138,7 +142,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
         viewModelScope.launch {
             repo.load()
             workoutRepo.load()
+            marksRepo.load()
         }
+    }
+
+    fun updateMarks(date: LocalDate, change: (DayMarks) -> DayMarks) {
+        viewModelScope.launch { marksRepo.update(date, change) }
     }
 
     override fun today(): LocalDate = LocalDate.now()

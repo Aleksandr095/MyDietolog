@@ -48,9 +48,11 @@ fun dotsFor(meals: List<Meal>, date: LocalDate): List<Boolean> =
 @Composable
 fun DayScreen(vm: AppViewModel) {
     val all by vm.meals.collectAsState()
+    val allMarks by vm.marks.collectAsState()
     val date = vm.selectedDate
     val weekStart = date.weekStart()
     val dayMeals = all.filter { it.date == date }.sortedWith(ru.mydietolog.data.Repository.mealOrder)
+    val dayMarks = allMarks.firstOrNull { it.date == date }
     val filled = MealType.main.count { t -> dayMeals.any { it.type == t } } + if (dayMeals.any { it.type == MealType.SNACK }) 1 else 0
 
     Column(Modifier.fillMaxSize().background(Palette.bg)) {
@@ -158,6 +160,9 @@ fun DayScreen(vm: AppViewModel) {
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            item(key = "day_marks_$date") {
+                DayMarksCard(dayMarks) { change -> vm.updateMarks(date, change) }
+            }
             items(rows, key = { (m, t) -> m?.id ?: "empty_${t.code}" }) { (meal, type) ->
                 if (meal != null) MealCard(vm, meal) { vm.openMeal(meal) }
                 else EmptyMealCard(type) { vm.openNewMeal(type) }
