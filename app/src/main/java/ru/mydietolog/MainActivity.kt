@@ -25,6 +25,7 @@ import ru.mydietolog.ui.MyDietologTheme
 import ru.mydietolog.ui.Palette
 import ru.mydietolog.ui.Screen
 import ru.mydietolog.ui.SettingsScreen
+import ru.mydietolog.ui.WorkoutPlanScreen
 import ru.mydietolog.ui.WorkoutProgramScreen
 import ru.mydietolog.ui.WorkoutSessionScreen
 import ru.mydietolog.ui.WorkoutsHomeScreen
@@ -57,6 +58,7 @@ class MainActivity : ComponentActivity() {
                             is Screen.Export -> ExportScreen(vm, screen.weekStart)
                             Screen.WorkoutsHome -> WorkoutsHomeScreen(vm)
                             Screen.WorkoutSession -> WorkoutSessionScreen(vm)
+                            is Screen.WorkoutPlan -> WorkoutPlanScreen(vm, screen.date)
                             Screen.WorkoutProgram -> WorkoutProgramScreen(vm)
                             Screen.CustomExercise -> CustomExerciseScreen(vm)
                             Screen.Settings -> SettingsScreen(vm)

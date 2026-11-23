@@ -51,6 +51,20 @@ class WorkoutController(
     var programError by mutableStateOf<String?>(null)
         private set
 
+    var selectedDate by mutableStateOf(nav.today())
+        private set
+
+    private var openedSnapshot: WorkoutLog? = null
+    private var createdFreshLog: Boolean = false
+
+    fun selectDate(date: LocalDate) {
+        selectedDate = date
+    }
+
+    fun openPlan(date: LocalDate) {
+        if (program.value?.sessionFor(date) != null) nav.push(Screen.WorkoutPlan(date))
+    }
+
     fun openProgram() {
         programPreview = null
         programError = null
@@ -83,26 +97,29 @@ class WorkoutController(
             val existing = repo.logsOn(date).firstOrNull { it.sessionId == session.id }
             val log = existing ?: WorkoutLog.fromProgramSession(date, session)
             if (existing == null) repo.upsertLog(log)
-            show(log)
+            show(log, createdFresh = existing == null)
         }
     }
 
-    fun startOutsidePlan(date: LocalDate = nav.today()) {
+    fun startOutsidePlan(date: LocalDate = selectedDate) {
         scope.launch {
             val log = WorkoutLog.outsidePlan(date)
             repo.upsertLog(log)
-            show(log)
+            show(log, createdFresh = true)
         }
     }
 
-    fun openExisting(log: WorkoutLog) = show(log)
+    fun openExisting(log: WorkoutLog) = show(log, createdFresh = false)
 
-    private fun show(log: WorkoutLog) {
+    private fun show(log: WorkoutLog, createdFresh: Boolean) {
+        openedSnapshot = log
+        createdFreshLog = createdFresh
         draft = WorkoutDraft.from(log, lastTimeResolver(repo::lastTimeFor, log.date))
         if (nav.current !is Screen.WorkoutSession) nav.push(Screen.WorkoutSession)
     }
 
-    fun save() {
+    /** Сохранить факт и вернуться на главный экран тренировок. */
+    fun finish() {
         val current = draft ?: run { close(); return }
         scope.launch {
             repo.upsertLog(current.toLog())
@@ -110,7 +127,23 @@ class WorkoutController(
         }
     }
 
+    /** Отменить правки: вернуть состояние на момент открытия или удалить пустую новую запись. */
+    fun cancel() {
+        val snap = openedSnapshot
+        val current = draft
+        scope.launch {
+            when {
+                snap == null -> Unit
+                createdFreshLog && current?.toLog()?.hasProgress != true -> repo.deleteLog(snap.id)
+                else -> repo.upsertLog(snap)
+            }
+            close()
+        }
+    }
+
     private fun close() {
+        openedSnapshot = null
+        createdFreshLog = false
         draft = null
         nav.popToWorkoutsHome()
     }

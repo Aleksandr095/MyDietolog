@@ -42,14 +42,16 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
     val program by vm.workouts.program.collectAsState()
     val logs by vm.workouts.logs.collectAsState()
     val today = vm.today()
-    val weekStart = today.weekStart()
+    val selected = vm.workouts.selectedDate
+    val weekStart = selected.weekStart()
 
-    val todaySession = program?.sessionFor(today)
-    val todayLogs = logs.filter { it.date == today }
-    val todayLogForSession = todaySession?.let { s -> todayLogs.firstOrNull { it.sessionId == s.id } }
+    val selectedSession = program?.sessionFor(selected)
+    val dayLogs = logs.filter { it.date == selected }
+    val logForSession = selectedSession?.let { s -> dayLogs.firstOrNull { it.sessionId == s.id } }
+        ?: dayLogs.firstOrNull()
 
-    val upcoming = (1..6).map { weekStart.plusDays(it.toLong()) }
-        .filter { it.isAfter(today) }
+    val upcoming = (0..6).map { weekStart.plusDays(it.toLong()) }
+        .filter { it.isAfter(selected) }
         .mapNotNull { d -> program?.sessionFor(d)?.let { d to it } }
 
     val pastStart = weekStart.minusWeeks(1)
@@ -85,18 +87,21 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Текущая неделя", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Palette.muted)
-                    WorkoutWeekStrip(vm, weekStart, today)
+                    WorkoutWeekStrip(vm, weekStart, today, selected)
                 }
             }
 
             item {
-                TodayCard(
+                SelectedDayCard(
+                    date = selected,
+                    today = today,
                     program = program,
-                    session = todaySession,
-                    existing = todayLogForSession,
+                    session = selectedSession,
+                    existing = logForSession,
+                    onSelectPlan = { vm.workouts.openPlan(selected) },
                     onStart = {
-                        if (todaySession != null) vm.workouts.startOrOpenSession(today, todaySession)
-                        else vm.workouts.startOutsidePlan(today)
+                        if (selectedSession != null) vm.workouts.startOrOpenSession(selected, selectedSession)
+                        else vm.workouts.startOutsidePlan(selected)
                     },
                     onOpen = { log -> vm.workouts.openExisting(log) },
                     onLoadProgram = { vm.workouts.openProgram() },
@@ -112,6 +117,7 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
                                 whenText = Ru.weekdayDayMonth(date),
                                 name = session.name,
                                 trailing = kindLabel(session),
+                                onClick = { vm.workouts.selectDate(date) },
                             )
                         }
                     }
@@ -150,7 +156,7 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
                         .height(48.dp)
                         .clip(shape)
                         .dashedBorder(Palette.dashed, 14.dp)
-                        .clickable { vm.workouts.startOutsidePlan(today) },
+                        .clickable { vm.workouts.startOutsidePlan(selected) },
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -162,14 +168,24 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
 }
 
 @Composable
-private fun TodayCard(
+private fun SelectedDayCard(
+    date: LocalDate,
+    today: LocalDate,
     program: WorkoutProgram?,
     session: ProgramSession?,
     existing: WorkoutLog?,
+    onSelectPlan: () -> Unit,
     onStart: () -> Unit,
     onOpen: (WorkoutLog) -> Unit,
     onLoadProgram: () -> Unit,
 ) {
+    val dayTitle = when (date) {
+        today -> "Сегодня"
+        today.plusDays(1) -> "Завтра"
+        today.minusDays(1) -> "Вчера"
+        else -> Ru.weekdaysFull[date.dayOfWeek.value - 1]
+    }
+    val isFuture = date.isAfter(today)
     val shape = RoundedCornerShape(20.dp)
     Column(
         Modifier
@@ -191,14 +207,18 @@ private fun TodayCard(
                 PrimaryButton("Открыть программу", onClick = onLoadProgram)
             }
             session == null -> {
-                Text("Сегодня · отдых", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Palette.ink)
-                Text("В программе нет занятия на этот день.", fontSize = 13.sp, color = Palette.muted)
-                SecondaryButton("Тренировка вне плана", onClick = onStart)
+                Text("$dayTitle · отдых", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Palette.ink)
+                Text(
+                    "${Ru.dayMonth(date)} · в программе нет занятия на этот день.",
+                    fontSize = 13.sp,
+                    color = Palette.muted,
+                )
+                if (!isFuture) SecondaryButton("Тренировка вне плана", onClick = onStart)
             }
             else -> {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Сегодня · ${session.name}",
+                        "$dayTitle · ${session.name}",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Palette.ink,
@@ -208,6 +228,8 @@ private fun TodayCard(
                 }
                 Text(
                     buildString {
+                        append(Ru.dayMonth(date))
+                        append(" · ")
                         append("${session.exercises.size} ${Ru.plural(session.exercises.size, "упражнение", "упражнения", "упражнений")}")
                         existing?.let { append(" · ${it.markLabel()}") }
                     },
@@ -215,36 +237,59 @@ private fun TodayCard(
                     fontWeight = FontWeight.SemiBold,
                     color = Palette.muted,
                 )
-                PrimaryButton(
-                    if (existing != null) "Продолжить" else "Начать",
-                    onClick = {
-                        if (existing != null) onOpen(existing) else onStart()
-                    },
-                )
+                session.exercises.take(3).forEach { ex ->
+                    Text(
+                        "· ${ex.name}" + if (ex.target.isNotBlank()) " — ${ex.target}" else "",
+                        fontSize = 13.sp,
+                        color = Palette.inkSoft,
+                    )
+                }
+                if (session.exercises.size > 3) {
+                    Text(
+                        "ещё ${session.exercises.size - 3} ${Ru.plural(session.exercises.size - 3, "упражнение", "упражнения", "упражнений")}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Palette.muted,
+                    )
+                }
+                SecondaryButton("Посмотреть план", onClick = onSelectPlan)
+                when {
+                    existing != null ->
+                        PrimaryButton("Продолжить тренировку", onClick = { onOpen(existing) })
+                    isFuture ->
+                        InfoBanner("Тренировку можно начать, когда наступит этот день.")
+                    else -> PrimaryButton("Начать", onClick = onStart)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun WorkoutWeekStrip(vm: AppViewModel, weekStart: LocalDate, today: LocalDate) {
+private fun WorkoutWeekStrip(vm: AppViewModel, weekStart: LocalDate, today: LocalDate, selected: LocalDate) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         (0..6).forEach { i ->
             val d = weekStart.plusDays(i.toLong())
-            val sel = d == today
+            val sel = d == selected
+            val isToday = d == today
             val mark = vm.workouts.weekMark(d)
             val shape = RoundedCornerShape(14.dp)
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .height(64.dp)
+                    .height(72.dp)
                     .clip(shape)
                     .background(if (sel) Palette.accent else Palette.surface)
                     .border(
-                        1.dp,
-                        if (sel) Palette.accent else Palette.line,
-                        shape,
+                        width = if (isToday && !sel) 2.dp else 1.dp,
+                        color = when {
+                            sel -> Palette.accent
+                            isToday -> Palette.accent
+                            else -> Palette.line
+                        },
+                        shape = shape,
                     )
+                    .clickable { vm.workouts.selectDate(d) }
                     .semantics {
                         contentDescription = Ru.weekdayDayMonth(d)
                         selected = sel
@@ -253,14 +298,20 @@ private fun WorkoutWeekStrip(vm: AppViewModel, weekStart: LocalDate, today: Loca
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(
-                    Ru.weekdaysShort[i],
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (sel) Color.White else Palette.muted,
+                    d.dayOfMonth.toString(),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (sel) Color.White else Palette.ink,
                 )
-                Spacer(Modifier.height(6.dp))
+                Text(
+                    Ru.weekdaysShort[i],
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (sel) Color.White.copy(alpha = 0.85f) else Palette.muted,
+                )
+                Spacer(Modifier.height(4.dp))
                 Dot(
-                    on = mark == WeekDayMark.DONE || mark == WeekDayMark.PARTIAL || (sel && mark != WeekDayMark.EMPTY),
+                    on = mark == WeekDayMark.DONE || mark == WeekDayMark.PARTIAL || mark == WeekDayMark.PLANNED,
                     onColor = when {
                         sel -> Color.White
                         mark == WeekDayMark.DONE -> Palette.accent
