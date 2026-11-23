@@ -20,6 +20,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -160,6 +161,15 @@ fun PhotoThumb(file: File?, modifier: Modifier, radius: Dp = 12.dp, description:
         }
     }
 }
+
+@Composable
+fun appFieldColors(container: Color = Palette.surface) = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = Palette.accent,
+    unfocusedBorderColor = Palette.field,
+    focusedContainerColor = container,
+    unfocusedContainerColor = container,
+    cursorColor = Palette.accent,
+)
 
 @Composable
 fun InfoBanner(text: String, warning: Boolean = false) {

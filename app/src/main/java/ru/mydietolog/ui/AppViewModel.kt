@@ -12,19 +12,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 import ru.mydietolog.data.Dish
-import ru.mydietolog.data.ExerciseKind
-import ru.mydietolog.data.ExerciseLog
 import ru.mydietolog.data.Exporter
 import ru.mydietolog.data.MAX_PHOTOS_PER_DISH
 import ru.mydietolog.data.Meal
 import ru.mydietolog.data.MealType
-import ru.mydietolog.data.ProgramSession
 import ru.mydietolog.data.Repository
 import ru.mydietolog.data.WeekSummary
-import ru.mydietolog.data.WorkoutLog
-import ru.mydietolog.data.WorkoutProgram
 import ru.mydietolog.data.WorkoutRepository
-import ru.mydietolog.data.weekStart
 import java.io.File
 import java.time.LocalDate
 import java.time.YearMonth
@@ -104,16 +98,14 @@ class MealDraft(
     fun allPhotos(): Set<String> = dishes.flatMap { it.photos }.toSet()
 }
 
-class AppViewModel(app: Application) : AndroidViewModel(app) {
+class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
 
     val repo = Repository(app)
     val workoutRepo = WorkoutRepository(app)
     private val exporter = Exporter(app, repo)
 
     val meals = repo.meals
-    val program = workoutRepo.program
-    val workoutLogs = workoutRepo.logs
-    val customNames = workoutRepo.customNames
+    val workouts = WorkoutController(workoutRepo, viewModelScope, this)
 
     var tab by mutableStateOf(MainTab.DIARY)
 
@@ -136,19 +128,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var draft by mutableStateOf<MealDraft?>(null)
         private set
 
-    var workoutDraft by mutableStateOf<WorkoutDraft?>(null)
-        private set
-
-    var customName by mutableStateOf("")
-    var customSets by mutableStateOf("3")
-    var customWeight by mutableStateOf("")
-    var customReps by mutableStateOf("10")
-
-    var programPreview by mutableStateOf<WorkoutProgram?>(null)
-        private set
-    var programError by mutableStateOf<String?>(null)
-        private set
-
     var busy by mutableStateOf(false)
         private set
 
@@ -167,26 +146,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun selectTab(t: MainTab) {
         if (tab == t) return
         if (tab == MainTab.DIARY && current is Screen.Edit) saveDraft()
-        if (tab == MainTab.WORKOUTS && current is Screen.WorkoutSession) saveWorkoutDraft()
+        if (tab == MainTab.WORKOUTS && current is Screen.WorkoutSession) workouts.save()
         tab = t
     }
 
-    fun push(s: Screen) { activeStack.add(s) }
+    override fun push(s: Screen) { activeStack.add(s) }
 
-    fun back(): Boolean {
-        when (current) {
-            is Screen.Edit -> { saveDraft(); return true }
-            is Screen.WorkoutSession -> { saveWorkoutDraft(); return true }
-            else -> Unit
-        }
-        if (activeStack.size > 1) {
-            activeStack.removeAt(activeStack.lastIndex)
-            if (current !is Screen.CustomExercise) {
-                // clear custom form leftovers when leaving
+    override fun popOne() {
+        if (activeStack.size > 1) activeStack.removeAt(activeStack.lastIndex)
+    }
+
+    override fun popToWorkoutsHome() {
+        while (workoutStack.size > 1) workoutStack.removeAt(workoutStack.lastIndex)
+    }
+
+    fun back(): Boolean = when (current) {
+        is Screen.Edit -> { saveDraft(); true }
+        is Screen.WorkoutSession -> { workouts.save(); true }
+        else -> {
+            if (activeStack.size <= 1) false
+            else {
+                activeStack.removeAt(activeStack.lastIndex)
+                true
             }
-            return true
         }
-        return false
     }
 
     fun openDay(date: LocalDate) {
@@ -287,206 +270,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun photoFile(name: String): File = repo.photoFile(name)
 
-    fun weekSummary(start: LocalDate): WeekSummary =
-        WeekSummary.build(start, meals.value, workoutLogs.value)
+    fun weekSummary(start: LocalDate): WeekSummary = freshWeek(start)
 
     fun exportFileName(week: WeekSummary) = exporter.fileName(week)
 
-    fun export(week: WeekSummary, onReady: (File) -> Unit) {
+    fun export(week: WeekSummary, onReady: (File) -> Unit) = runExport { onReady(buildZip(week)) }
+
+    fun exportToDownloads(week: WeekSummary, onDone: (Boolean) -> Unit) = runExport {
+        onDone(exporter.saveToDownloads(buildZip(week)))
+    }
+
+    private fun freshWeek(start: LocalDate) =
+        WeekSummary.build(start, meals.value, workouts.logs.value)
+
+    private suspend fun buildZip(week: WeekSummary) = exporter.buildZip(freshWeek(week.start), today())
+
+    private fun runExport(block: suspend () -> Unit) {
         if (busy) return
         busy = true
         viewModelScope.launch {
             try {
-                val full = WeekSummary.build(week.start, meals.value, workoutLogs.value)
-                onReady(exporter.buildZip(full, today()))
+                block()
             } finally {
                 busy = false
             }
-        }
-    }
-
-    fun exportToDownloads(week: WeekSummary, onDone: (Boolean) -> Unit) {
-        if (busy) return
-        busy = true
-        viewModelScope.launch {
-            try {
-                val full = WeekSummary.build(week.start, meals.value, workoutLogs.value)
-                val zip = exporter.buildZip(full, today())
-                onDone(exporter.saveToDownloads(zip))
-            } finally {
-                busy = false
-            }
-        }
-    }
-
-    // ---------- тренировки ----------
-
-    fun openProgram() {
-        programPreview = null
-        programError = null
-        push(Screen.WorkoutProgram)
-    }
-
-    fun pickProgramFile(uri: Uri, displayName: String?) {
-        programError = null
-        viewModelScope.launch {
-            try {
-                programPreview = workoutRepo.parseProgram(uri, displayName)
-            } catch (e: Exception) {
-                programPreview = null
-                programError = e.message ?: "Не удалось прочитать файл"
-            }
-        }
-    }
-
-    fun confirmReplaceProgram() {
-        val preview = programPreview ?: return
-        viewModelScope.launch {
-            workoutRepo.replaceProgram(preview)
-            programPreview = null
-            programError = null
-        }
-    }
-
-    fun clearProgramPreview() {
-        programPreview = null
-        programError = null
-    }
-
-    /** Старт или открытие факта на дату по плановой сессии. */
-    fun startOrOpenSession(date: LocalDate, session: ProgramSession) {
-        viewModelScope.launch {
-            val existing = workoutRepo.logsOn(date).firstOrNull { it.sessionId == session.id }
-            val log = existing ?: WorkoutLog.fromProgramSession(date, session)
-            if (existing == null) workoutRepo.upsertLog(log)
-            showWorkoutLog(log)
-        }
-    }
-
-    fun startOutsidePlan(date: LocalDate = today()) {
-        viewModelScope.launch {
-            val log = WorkoutLog.outsidePlan(date)
-            workoutRepo.upsertLog(log)
-            showWorkoutLog(log)
-        }
-    }
-
-    fun openExistingLog(log: WorkoutLog) {
-        showWorkoutLog(log)
-    }
-
-    private fun showWorkoutLog(log: WorkoutLog) {
-        val resolver = lastTimeResolver(workoutRepo::lastTimeFor, log.date)
-        workoutDraft = WorkoutDraft.from(log, resolver)
-        if (current !is Screen.WorkoutSession) push(Screen.WorkoutSession)
-    }
-
-    fun saveWorkoutDraft() {
-        val d = workoutDraft ?: run { closeWorkoutSession(); return }
-        viewModelScope.launch {
-            workoutRepo.upsertLog(d.toLog())
-            closeWorkoutSession()
-        }
-    }
-
-    private fun closeWorkoutSession() {
-        workoutDraft = null
-        if (current is Screen.WorkoutSession) {
-            // pop session and any custom on top was already handled
-            while (workoutStack.isNotEmpty() && workoutStack.last() !is Screen.WorkoutsHome) {
-                val last = workoutStack.last()
-                workoutStack.removeAt(workoutStack.lastIndex)
-                if (last is Screen.WorkoutSession) break
-            }
-        }
-    }
-
-    fun openCustomExercise() {
-        customName = ""
-        customSets = "3"
-        customWeight = ""
-        customReps = "10"
-        push(Screen.CustomExercise)
-    }
-
-    fun nameSuggestions(): List<String> = workoutRepo.suggestNames(customName)
-
-    fun applyNameSuggestion(name: String) {
-        customName = name
-    }
-
-    fun addCustomExerciseToDraft() {
-        val d = workoutDraft ?: return
-        val name = customName.trim()
-        if (name.isBlank()) return
-        val setCount = customSets.toIntOrNull()?.coerceIn(1, 12) ?: 3
-        val weight = customWeight.replace(',', '.')
-        val reps = customReps
-        val sets = List(setCount) {
-            SetDraft(weight = weight, reps = reps, done = false)
-        }
-        d.exercises.add(
-            ExerciseDraft(
-                name = name,
-                target = "$setCount × ${reps.ifBlank { "—" }}",
-                kind = ExerciseKind.STRENGTH,
-                isCustom = true,
-                sets = sets,
-                lastTimeLabel = ru.mydietolog.data.formatLastTime(
-                    workoutRepo.lastTimeFor(null, name, d.date),
-                ),
-            ),
-        )
-        viewModelScope.launch {
-            workoutRepo.rememberCustomName(name)
-            workoutRepo.upsertLog(d.toLog())
-        }
-        if (current is Screen.CustomExercise) {
-            workoutStack.removeAt(workoutStack.lastIndex)
-        }
-    }
-
-    fun addSet(ex: ExerciseDraft) {
-        val last = ex.sets.lastOrNull()
-        ex.sets.add(SetDraft(weight = last?.weight.orEmpty(), reps = last?.reps.orEmpty()))
-    }
-
-    fun toggleExerciseDone(ex: ExerciseDraft) {
-        ex.done = !ex.done
-        if (ex.done && ex.kind == ExerciseKind.STRENGTH) {
-            ex.sets.forEach { if (it.reps.isNotBlank() || it.weight.isNotBlank()) it.done = true }
-        }
-        persistWorkoutDraftQuiet()
-    }
-
-    fun persistWorkoutDraftQuiet() {
-        val d = workoutDraft ?: return
-        viewModelScope.launch { workoutRepo.upsertLog(d.toLog()) }
-    }
-
-    fun markAllPlannedDone() {
-        val d = workoutDraft ?: return
-        d.exercises.filterNot { it.isCustom }.forEach { ex ->
-            ex.done = true
-            if (ex.kind == ExerciseKind.STRENGTH) {
-                ex.sets.forEach { s ->
-                    if (s.reps.isNotBlank() || s.weight.isNotBlank()) s.done = true
-                }
-            }
-        }
-        persistWorkoutDraftQuiet()
-    }
-
-    fun weekMark(date: LocalDate): WeekDayMark {
-        val logs = workoutRepo.logsOn(date)
-        val prog = program.value?.sessionFor(date)
-        return when {
-            logs.any { it.isFullyDone } -> WeekDayMark.DONE
-            logs.any { it.hasProgress || it.isPartial } -> WeekDayMark.PARTIAL
-            prog != null -> WeekDayMark.PLANNED
-            else -> WeekDayMark.EMPTY
         }
     }
 }
-
-enum class WeekDayMark { EMPTY, PLANNED, PARTIAL, DONE }

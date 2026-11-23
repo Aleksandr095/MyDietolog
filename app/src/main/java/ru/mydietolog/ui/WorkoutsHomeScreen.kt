@@ -39,8 +39,8 @@ import java.time.LocalDate
 
 @Composable
 fun WorkoutsHomeScreen(vm: AppViewModel) {
-    val program by vm.program.collectAsState()
-    val logs by vm.workoutLogs.collectAsState()
+    val program by vm.workouts.program.collectAsState()
+    val logs by vm.workouts.logs.collectAsState()
     val today = vm.today()
     val weekStart = today.weekStart()
 
@@ -72,7 +72,7 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
                     color = Palette.muted,
                 )
             }
-            TextButton(onClick = { vm.openProgram() }) {
+            TextButton(onClick = { vm.workouts.openProgram() }) {
                 Text("Программа", fontWeight = FontWeight.Bold, color = Palette.accent)
             }
         }
@@ -95,11 +95,11 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
                     session = todaySession,
                     existing = todayLogForSession,
                     onStart = {
-                        if (todaySession != null) vm.startOrOpenSession(today, todaySession)
-                        else vm.startOutsidePlan(today)
+                        if (todaySession != null) vm.workouts.startOrOpenSession(today, todaySession)
+                        else vm.workouts.startOutsidePlan(today)
                     },
-                    onOpen = { log -> vm.openExistingLog(log) },
-                    onLoadProgram = { vm.openProgram() },
+                    onOpen = { log -> vm.workouts.openExisting(log) },
+                    onLoadProgram = { vm.workouts.openProgram() },
                 )
             }
 
@@ -135,7 +135,7 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
                                 whenText = Ru.weekdayDayMonth(log.date),
                                 name = log.sessionName,
                                 trailing = log.markLabel(),
-                                onClick = { vm.openExistingLog(log) },
+                                onClick = { vm.workouts.openExisting(log) },
                             )
                         }
                     }
@@ -150,7 +150,7 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
                         .height(48.dp)
                         .clip(shape)
                         .dashedBorder(Palette.dashed, 14.dp)
-                        .clickable { vm.startOutsidePlan(today) },
+                        .clickable { vm.workouts.startOutsidePlan(today) },
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -232,7 +232,7 @@ private fun WorkoutWeekStrip(vm: AppViewModel, weekStart: LocalDate, today: Loca
         (0..6).forEach { i ->
             val d = weekStart.plusDays(i.toLong())
             val sel = d == today
-            val mark = vm.weekMark(d)
+            val mark = vm.workouts.weekMark(d)
             val shape = RoundedCornerShape(14.dp)
             Column(
                 modifier = Modifier

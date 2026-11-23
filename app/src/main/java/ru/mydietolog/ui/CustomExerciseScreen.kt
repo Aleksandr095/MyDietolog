@@ -15,7 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -30,9 +29,10 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun CustomExerciseScreen(vm: AppViewModel) {
-    val names by vm.customNames.collectAsState()
-    val suggestions = vm.nameSuggestions().ifEmpty {
-        if (vm.customName.isBlank()) names.take(5) else emptyList()
+    val w = vm.workouts
+    val names by w.customNames.collectAsState()
+    val suggestions = w.nameSuggestions().ifEmpty {
+        if (w.customName.isBlank()) names.take(5) else emptyList()
     }
 
     Column(
@@ -56,13 +56,13 @@ fun CustomExerciseScreen(vm: AppViewModel) {
         ) {
             FieldLabel("Название")
             OutlinedTextField(
-                value = vm.customName,
-                onValueChange = { vm.customName = it },
+                value = w.customName,
+                onValueChange = { w.customName = it },
                 placeholder = { Text("Например, выпады") },
                 singleLine = true,
                 textStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold),
                 shape = RoundedCornerShape(12.dp),
-                colors = customFieldColors(),
+                colors = appFieldColors(),
                 modifier = Modifier.fillMaxWidth(),
             )
 
@@ -83,7 +83,7 @@ fun CustomExerciseScreen(vm: AppViewModel) {
                             color = Palette.ink,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { vm.applyNameSuggestion(s) }
+                                .clickable { w.customName = s }
                                 .padding(horizontal = 14.dp, vertical = 12.dp),
                         )
                         if (i < suggestions.lastIndex) {
@@ -94,11 +94,11 @@ fun CustomExerciseScreen(vm: AppViewModel) {
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NumberBox("Подходы", vm.customSets, { vm.customSets = it.filter(Char::isDigit).take(2) }, Modifier.weight(1f))
-                NumberBox("Вес, кг", vm.customWeight, {
-                    vm.customWeight = it.filter { ch -> ch.isDigit() || ch == '.' || ch == ',' }.take(6)
+                NumberBox("Подходы", w.customSets, { w.customSets = it.filter(Char::isDigit).take(2) }, Modifier.weight(1f))
+                NumberBox("Вес, кг", w.customWeight, {
+                    w.customWeight = it.filter { ch -> ch.isDigit() || ch == '.' || ch == ',' }.take(6)
                 }, Modifier.weight(1f))
-                NumberBox("Повторы", vm.customReps, { vm.customReps = it.filter(Char::isDigit).take(3) }, Modifier.weight(1f))
+                NumberBox("Повторы", w.customReps, { w.customReps = it.filter(Char::isDigit).take(3) }, Modifier.weight(1f))
             }
 
             Text(
@@ -116,9 +116,9 @@ fun CustomExerciseScreen(vm: AppViewModel) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 20.dp)) {
             PrimaryButton(
                 "Добавить в факт",
-                onClick = { vm.addCustomExerciseToDraft() },
+                onClick = { w.addCustomExercise() },
                 icon = AppIcons.check,
-                enabled = vm.customName.isNotBlank() && vm.workoutDraft != null,
+                enabled = w.customName.isNotBlank() && w.draft != null,
             )
         }
     }
@@ -146,17 +146,9 @@ private fun NumberBox(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             textStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold),
             shape = RoundedCornerShape(12.dp),
-            colors = customFieldColors(),
+            colors = appFieldColors(),
             modifier = Modifier.fillMaxWidth(),
         )
     }
 }
 
-@Composable
-private fun customFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = Palette.accent,
-    unfocusedBorderColor = Palette.field,
-    focusedContainerColor = Palette.surface,
-    unfocusedContainerColor = Palette.surface,
-    cursorColor = Palette.accent,
-)

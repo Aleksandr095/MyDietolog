@@ -55,13 +55,8 @@ class WorkoutRepository(private val context: Context) {
         }.getOrElse { emptyList() }
     }
 
-    fun logOn(date: LocalDate): WorkoutLog? =
-        _logs.value.filter { it.date == date }.maxByOrNull { it.createdAt }
-
     fun logsOn(date: LocalDate): List<WorkoutLog> =
         _logs.value.filter { it.date == date }.sortedBy { it.createdAt }
-
-    fun logById(id: String): WorkoutLog? = _logs.value.firstOrNull { it.id == id }
 
     /** Последнее выполнение того же упражнения (по id программы или имени). */
     fun lastTimeFor(exerciseId: String?, name: String, before: LocalDate): ExerciseLog? {
@@ -106,23 +101,14 @@ class WorkoutRepository(private val context: Context) {
     suspend fun replaceProgram(program: WorkoutProgram) {
         val stored = program.copy(loadedAt = System.currentTimeMillis())
         _program.value = stored
-        withContext(Dispatchers.IO) {
-            atomicWrite(programFile, stored.toJson().toString())
-        }
+        withContext(Dispatchers.IO) { programFile.writeAtomic(stored.toJson().toString()) }
     }
 
     suspend fun rememberCustomName(name: String) {
         val trimmed = name.trim()
         if (trimmed.isBlank()) return
         val norm = normalizeExerciseName(trimmed)
-        val current = _customNames.value
-        if (current.any { normalizeExerciseName(it) == norm }) {
-            val reordered = listOf(trimmed) + current.filterNot { normalizeExerciseName(it) == norm }
-            _customNames.value = reordered
-            persistNames(reordered)
-            return
-        }
-        val updated = listOf(trimmed) + current
+        val updated = listOf(trimmed) + _customNames.value.filterNot { normalizeExerciseName(it) == norm }
         _customNames.value = updated.take(100)
         persistNames(_customNames.value)
     }
@@ -138,19 +124,10 @@ class WorkoutRepository(private val context: Context) {
             put("version", 1)
             put("logs", JSONArray(list.map { it.toJson() }))
         }
-        atomicWrite(logsFile, root.toString())
+        logsFile.writeAtomic(root.toString())
     }
 
     private suspend fun persistNames(list: List<String>) = withContext(Dispatchers.IO) {
-        atomicWrite(namesFile, JSONArray(list).toString())
-    }
-
-    private fun atomicWrite(file: File, text: String) {
-        val tmp = File(file.parentFile, "${file.name}.tmp")
-        tmp.writeText(text)
-        if (!tmp.renameTo(file)) {
-            file.writeText(text)
-            tmp.delete()
-        }
+        namesFile.writeAtomic(JSONArray(list).toString())
     }
 }

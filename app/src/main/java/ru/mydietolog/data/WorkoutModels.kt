@@ -206,6 +206,12 @@ data class WorkoutLog(
         put("exercises", JSONArray(exercises.map { it.toJson() }))
     }
 
+    /** JSON для недельной выгрузки: тот же лог плюс статус для читателя архива. */
+    fun toExportJson(): JSONObject = toJson().apply {
+        put("outside_plan", sessionId == null)
+        put("status", markLabel())
+    }
+
     companion object {
         fun fromProgramSession(date: LocalDate, session: ProgramSession): WorkoutLog =
             WorkoutLog(

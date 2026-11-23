@@ -30,20 +30,19 @@ import ru.mydietolog.data.Ru
 import ru.mydietolog.data.WorkoutProgram
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 @Composable
 fun WorkoutProgramScreen(vm: AppViewModel) {
-    val program by vm.program.collectAsState()
-    val preview = vm.programPreview
-    val error = vm.programError
+    val program by vm.workouts.program.collectAsState()
+    val preview = vm.workouts.programPreview
+    val error = vm.workouts.programError
     val context = LocalContext.current
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
             ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
-        vm.pickProgramFile(uri, name)
+        vm.workouts.pickProgramFile(uri, name)
     }
 
     Column(Modifier.fillMaxSize().background(Palette.bg)) {
@@ -83,7 +82,7 @@ fun WorkoutProgramScreen(vm: AppViewModel) {
                     program = preview,
                     emptyText = "",
                 )
-                PrimaryButton("Заменить программу", onClick = { vm.confirmReplaceProgram() })
+                PrimaryButton("Заменить программу", onClick = { vm.workouts.confirmReplaceProgram() })
                 Text(
                     "Отмеченные тренировки и история «в прошлый раз» останутся. Меняется только план на будущее.",
                     fontSize = 13.sp,

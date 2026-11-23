@@ -42,7 +42,7 @@ import java.time.LocalDate
 @Composable
 fun ExportScreen(vm: AppViewModel, initialStart: LocalDate) {
     val all by vm.meals.collectAsState()
-    val workouts by vm.workoutLogs.collectAsState()
+    val workouts by vm.workouts.logs.collectAsState()
     var start by remember { mutableStateOf(initialStart) }
     val context = LocalContext.current
     val today = vm.today()

@@ -243,38 +243,8 @@ class Exporter(private val context: Context, private val repo: Repository) {
                             }))
                         }
                     }))
-                    put("workouts", JSONArray(day.workouts.map { workoutJson(it) }))
+                    put("workouts", JSONArray(day.workouts.map { it.toExportJson() }))
                 }
             }))
         }
-
-    private fun workoutJson(workout: WorkoutLog): JSONObject = JSONObject().apply {
-        put("id", workout.id)
-        put("session_id", workout.sessionId ?: JSONObject.NULL)
-        put("session_name", workout.sessionName)
-        put("outside_plan", workout.sessionId == null)
-        put("status", workout.markLabel())
-        put("created_at", workout.createdAt)
-        put("exercises", JSONArray(workout.exercises.map { ex ->
-            JSONObject().apply {
-                put("id", ex.id)
-                put("exercise_id", ex.exerciseId ?: JSONObject.NULL)
-                put("name", ex.name)
-                put("target", ex.target)
-                put("note", ex.note)
-                put("technique_url", ex.techniqueUrl ?: JSONObject.NULL)
-                put("kind", ex.kind.code)
-                put("is_custom", ex.isCustom)
-                put("done", ex.done)
-                put("minutes", ex.minutes ?: JSONObject.NULL)
-                put("sets", JSONArray(ex.sets.map { s ->
-                    JSONObject().apply {
-                        put("weight_kg", s.weightKg ?: JSONObject.NULL)
-                        put("reps", s.reps ?: JSONObject.NULL)
-                        put("done", s.done)
-                    }
-                }))
-            }
-        }))
-    }
 }

@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -41,7 +40,7 @@ import ru.mydietolog.data.Ru
 
 @Composable
 fun WorkoutSessionScreen(vm: AppViewModel) {
-    val draft = vm.workoutDraft ?: return
+    val draft = vm.workouts.draft ?: return
     val context = LocalContext.current
 
     Column(
@@ -53,7 +52,7 @@ fun WorkoutSessionScreen(vm: AppViewModel) {
         ScreenHeader(
             title = draft.sessionName,
             subtitle = "${Ru.weekdayDayMonth(draft.date)} · факт можно править",
-            onBack = { vm.saveWorkoutDraft() },
+            onBack = { vm.workouts.save() },
         )
 
         LazyColumn(
@@ -68,9 +67,9 @@ fun WorkoutSessionScreen(vm: AppViewModel) {
             items(draft.exercises, key = { it.id }) { ex ->
                 ExerciseCard(
                     ex = ex,
-                    onToggle = { vm.toggleExerciseDone(ex) },
-                    onAddSet = { vm.addSet(ex) },
-                    onChanged = { vm.persistWorkoutDraftQuiet() },
+                    onToggle = { vm.workouts.toggleDone(ex) },
+                    onAddSet = { vm.workouts.addSet(ex) },
+                    onChanged = { vm.workouts.persistQuiet() },
                     onTechnique = { url ->
                         runCatching {
                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -87,7 +86,7 @@ fun WorkoutSessionScreen(vm: AppViewModel) {
                         .height(48.dp)
                         .clip(shape)
                         .dashedBorder(Palette.dashed, 14.dp)
-                        .clickable(role = Role.Button) { vm.openCustomExercise() },
+                        .clickable(role = Role.Button) { vm.workouts.openCustomExercise() },
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -107,9 +106,9 @@ fun WorkoutSessionScreen(vm: AppViewModel) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (draft.sessionId != null) {
-                SecondaryButton("Отметить плановые выполненными", onClick = { vm.markAllPlannedDone() })
+                SecondaryButton("Отметить плановые выполненными", onClick = { vm.workouts.markPlannedDone() })
             }
-            PrimaryButton("Сохранить факт", onClick = { vm.saveWorkoutDraft() }, icon = AppIcons.check)
+            PrimaryButton("Сохранить факт", onClick = { vm.workouts.save() }, icon = AppIcons.check)
         }
     }
 }
@@ -181,7 +180,7 @@ private fun ExerciseCard(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     textStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold),
                     shape = RoundedCornerShape(10.dp),
-                    colors = workoutFieldColors(),
+                    colors = appFieldColors(Palette.bg),
                     modifier = Modifier.width(96.dp),
                 )
             }
@@ -218,7 +217,7 @@ private fun SetTable(ex: ExerciseDraft, onAddSet: () -> Unit, onChanged: () -> U
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     textStyle = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold),
                     shape = RoundedCornerShape(10.dp),
-                    colors = workoutFieldColors(),
+                    colors = appFieldColors(Palette.bg),
                     modifier = Modifier.weight(1f).height(52.dp),
                 )
                 OutlinedTextField(
@@ -232,7 +231,7 @@ private fun SetTable(ex: ExerciseDraft, onAddSet: () -> Unit, onChanged: () -> U
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     textStyle = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold),
                     shape = RoundedCornerShape(10.dp),
-                    colors = workoutFieldColors(),
+                    colors = appFieldColors(Palette.bg),
                     modifier = Modifier.weight(1f).height(52.dp),
                 )
                 DoneCheck(set.done) {
@@ -271,12 +270,3 @@ fun DoneCheck(done: Boolean, onClick: () -> Unit) {
 }
 
 private val ColorWhite = androidx.compose.ui.graphics.Color.White
-
-@Composable
-private fun workoutFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = Palette.accent,
-    unfocusedBorderColor = Palette.field,
-    focusedContainerColor = Palette.bg,
-    unfocusedContainerColor = Palette.bg,
-    cursorColor = Palette.accent,
-)
