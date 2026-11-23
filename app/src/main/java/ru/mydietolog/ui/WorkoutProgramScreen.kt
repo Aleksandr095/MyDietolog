@@ -1,9 +1,14 @@
 package ru.mydietolog.ui
 
+import android.Manifest
+import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +24,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,11 +46,51 @@ fun WorkoutProgramScreen(vm: AppViewModel) {
     val error = vm.workouts.programError
     val context = LocalContext.current
 
+    var storageHint by remember { mutableStateOf<String?>(null) }
+    var waitingForAllFiles by remember { mutableStateOf(false) }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
         val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
             ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
         vm.workouts.pickProgramFile(uri, name)
+    }
+
+    fun launchPicker() {
+        waitingForAllFiles = false
+        storageHint = null
+        picker.launch(arrayOf("application/json", "application/octet-stream", "text/plain", "text/*", "*/*"))
+    }
+
+    fun requestAllFilesOrPick() {
+        if (StorageAccess.needsAllFilesAccess()) {
+            waitingForAllFiles = true
+            storageHint = "Включите доступ ко всем файлам и вернитесь — выбор JSON продолжится."
+            StorageAccess.openAllFilesSettings(context)
+        } else {
+            launchPicker()
+        }
+    }
+
+    val readPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted && Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            storageHint = "Без доступа к файлам выбрать программу не получится."
+            return@rememberLauncherForActivityResult
+        }
+        requestAllFilesOrPick()
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (!waitingForAllFiles) return@LifecycleEventEffect
+        if (StorageAccess.needsAllFilesAccess()) {
+            waitingForAllFiles = false
+            storageHint = "Доступ ко всем файлам не включён. Без него JSON не открыть."
+        } else {
+            launchPicker()
+        }
     }
 
     Column(Modifier.fillMaxSize().background(Palette.bg)) {
@@ -68,8 +116,17 @@ fun WorkoutProgramScreen(vm: AppViewModel) {
 
             SecondaryButton(
                 "Выбрать файл программы…",
-                onClick = { picker.launch(arrayOf("application/json", "text/*", "*/*")) },
+                onClick = {
+                    storageHint = null
+                    if (StorageAccess.needsReadPermission(context)) {
+                        readPermission.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                    } else {
+                        requestAllFilesOrPick()
+                    }
+                },
             )
+
+            storageHint?.let { InfoBanner(it, warning = true) }
 
             if (error != null) {
                 InfoBanner(error, warning = true)
