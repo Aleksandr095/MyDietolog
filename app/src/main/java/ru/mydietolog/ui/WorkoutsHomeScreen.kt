@@ -343,7 +343,7 @@ private fun WorkoutWeekStrip(vm: AppViewModel, weekStart: LocalDate, today: Loca
                     .clickable { vm.workouts.selectDate(d) }
                     .semantics {
                         contentDescription = Ru.weekdayDayMonth(d)
-                        selected = sel
+                        this.selected = sel
                     },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
