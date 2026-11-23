@@ -112,7 +112,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
     private val diaryStack = mutableStateListOf<Screen>(Screen.Day)
     private val workoutStack = mutableStateListOf<Screen>(Screen.WorkoutsHome)
 
-    val current: Screen
+    override val current: Screen
         get() = when (tab) {
             MainTab.DIARY -> diaryStack.last()
             MainTab.WORKOUTS -> workoutStack.last()
@@ -141,7 +141,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
         }
     }
 
-    fun today(): LocalDate = LocalDate.now()
+    override fun today(): LocalDate = LocalDate.now()
 
     fun selectTab(t: MainTab) {
         if (tab == t) return
