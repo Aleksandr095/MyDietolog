@@ -95,7 +95,7 @@ class WorkoutRepository(private val context: Context) {
             context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
                 ?: error("Не удалось прочитать файл")
         } catch (_: SecurityException) {
-            error("Нет доступа к файлу. Разрешите доступ к файлам и выберите его снова.")
+            error("Нет доступа к файлу. Выберите его ещё раз.")
         }
         val json = JSONObject(text)
         WorkoutProgram.fromJson(json, fileName = displayName).copy(loadedAt = System.currentTimeMillis())
