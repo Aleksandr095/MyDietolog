@@ -106,13 +106,7 @@ class Repository(private val context: Context) {
             put("version", 1)
             put("meals", JSONArray(list.map { it.toJson() }))
         }
-        val tmp = File(context.filesDir, "meals.json.tmp")
-        tmp.writeText(root.toString())
-        if (!tmp.renameTo(dataFile)) {
-            dataFile.writeText(root.toString())
-            tmp.delete()
-        }
-        Unit
+        dataFile.writeAtomic(root.toString())
     }
 
     private fun cleanupOrphanPhotos(list: List<Meal>) {

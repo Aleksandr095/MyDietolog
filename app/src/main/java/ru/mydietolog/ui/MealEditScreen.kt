@@ -30,7 +30,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -360,7 +359,7 @@ private fun DishCard(vm: AppViewModel, dish: DishDraft, index: Int, onAddPhoto: 
                 minLines = 2,
                 maxLines = 5,
                 shape = RoundedCornerShape(12.dp),
-                colors = fieldColors(),
+                colors = appFieldColors(),
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -383,17 +382,9 @@ private fun NumberField(label: String, value: String, onChange: (String) -> Unit
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             textStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold),
             shape = RoundedCornerShape(10.dp),
-            colors = fieldColors(),
+            colors = appFieldColors(),
             modifier = Modifier.fillMaxWidth(),
         )
     }
 }
 
-@Composable
-private fun fieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = Palette.accent,
-    unfocusedBorderColor = Palette.field,
-    focusedContainerColor = Palette.surface,
-    unfocusedContainerColor = Palette.surface,
-    cursorColor = Palette.accent,
-)

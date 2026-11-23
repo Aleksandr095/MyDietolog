@@ -164,7 +164,7 @@ fun DayScreen(vm: AppViewModel) {
             }
         }
 
-        Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 20.dp)) {
+        Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 12.dp)) {
             PrimaryButton(
                 "Выгрузить неделю",
                 onClick = { vm.push(Screen.Export(weekStart)) },
