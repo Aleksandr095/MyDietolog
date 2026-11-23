@@ -16,6 +16,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -24,19 +27,27 @@ import androidx.compose.ui.unit.sp
 import ru.mydietolog.data.ExerciseKind
 import ru.mydietolog.data.ProgramExercise
 import ru.mydietolog.data.Ru
+import ru.mydietolog.data.movedFrom
+import ru.mydietolog.data.sessionOn
 import java.time.LocalDate
 
 /** План занятия по программе без записи факта. */
 @Composable
 fun WorkoutPlanScreen(vm: AppViewModel, date: LocalDate) {
     val program by vm.workouts.program.collectAsState()
-    val session = program?.sessionFor(date)
+    val moves by vm.workouts.moves.collectAsState()
+    val session = program?.let { sessionOn(it, moves, date) }
     val today = vm.today()
+    var showMove by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().background(Palette.bg)) {
         ScreenHeader(
             title = session?.name ?: "Нет занятия",
-            subtitle = "${Ru.weekdayDayMonth(date)} · по программе",
+            subtitle = buildString {
+                append(Ru.weekdayDayMonth(date))
+                val from = session?.let { movedFrom(it, date, moves) }
+                append(if (from != null) " · перенесено с ${Ru.weekdayDayMonth(from)}" else " · по программе")
+            },
             onBack = { vm.back() },
         )
 
@@ -45,6 +56,7 @@ fun WorkoutPlanScreen(vm: AppViewModel, date: LocalDate) {
                 InfoBanner("В этот день в программе нет тренировки.")
             }
         } else {
+            val plan = session
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
@@ -63,7 +75,7 @@ fun WorkoutPlanScreen(vm: AppViewModel, date: LocalDate) {
                     date.isAfter(today) ->
                         InfoBanner("Тренировку можно начать, когда наступит этот день.")
                     else -> {
-                        PrimaryButton("Начать тренировку", onClick = { vm.workouts.startOrOpenSession(date, session) })
+                        PrimaryButton("Начать", onClick = { vm.workouts.startOrOpenSession(date, plan) })
                         Text(
                             "Откроется экран факта — подходы, вес и галочки.",
                             fontSize = 12.sp,
@@ -72,7 +84,22 @@ fun WorkoutPlanScreen(vm: AppViewModel, date: LocalDate) {
                         )
                     }
                 }
+                SecondaryButton("Изменить план", onClick = { vm.workouts.openProgramEditor() })
+                SecondaryButton("Перенести", onClick = { showMove = true })
             }
+        }
+        val currentProgram = program
+        if (showMove && session != null && currentProgram != null) {
+            MoveWorkoutDialog(
+                sessionName = session.name,
+                from = date,
+                occupied = { d -> sessionOn(currentProgram, moves, d)?.name },
+                onPick = {
+                    showMove = false
+                    vm.workouts.moveSession(date, it)
+                },
+                onDismiss = { showMove = false },
+            )
         }
     }
 }

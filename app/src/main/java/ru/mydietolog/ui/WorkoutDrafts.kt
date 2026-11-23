@@ -97,6 +97,7 @@ class WorkoutDraft(
     sessionName: String,
     exercises: List<ExerciseDraft>,
     val createdAt: Long,
+    val cancelled: Boolean = false,
 ) {
     var sessionName by mutableStateOf(sessionName)
     val exercises: SnapshotStateList<ExerciseDraft> =
@@ -109,6 +110,7 @@ class WorkoutDraft(
         sessionName = sessionName,
         exercises = exercises.map { it.toExerciseLog() },
         createdAt = createdAt,
+        cancelled = cancelled,
     )
 
     companion object {
@@ -119,6 +121,7 @@ class WorkoutDraft(
             sessionName = log.sessionName,
             exercises = log.exercises.map { ExerciseDraft.from(it, lastTime(it)) },
             createdAt = log.createdAt,
+            cancelled = log.cancelled,
         )
     }
 }

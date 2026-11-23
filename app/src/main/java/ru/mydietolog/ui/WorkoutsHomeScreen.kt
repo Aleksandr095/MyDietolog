@@ -14,11 +14,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +38,8 @@ import ru.mydietolog.data.ProgramSession
 import ru.mydietolog.data.Ru
 import ru.mydietolog.data.WorkoutLog
 import ru.mydietolog.data.WorkoutProgram
+import ru.mydietolog.data.movedFrom
+import ru.mydietolog.data.sessionOn
 import ru.mydietolog.data.weekStart
 import java.time.LocalDate
 
@@ -41,18 +47,19 @@ import java.time.LocalDate
 fun WorkoutsHomeScreen(vm: AppViewModel) {
     val program by vm.workouts.program.collectAsState()
     val logs by vm.workouts.logs.collectAsState()
+    val moves by vm.workouts.moves.collectAsState()
     val today = vm.today()
     val selected = vm.workouts.selectedDate
     val weekStart = selected.weekStart()
+    var showMove by remember { mutableStateOf(false) }
 
-    val selectedSession = program?.sessionFor(selected)
+    val selectedSession = program?.let { sessionOn(it, moves, selected) }
     val dayLogs = logs.filter { it.date == selected }
     val logForSession = selectedSession?.let { s -> dayLogs.firstOrNull { it.sessionId == s.id } }
-        ?: dayLogs.firstOrNull()
 
     val upcoming = (0..6).map { weekStart.plusDays(it.toLong()) }
         .filter { it.isAfter(selected) }
-        .mapNotNull { d -> program?.sessionFor(d)?.let { d to it } }
+        .mapNotNull { d -> program?.let { p -> sessionOn(p, moves, d)?.let { d to it } } }
 
     val pastStart = weekStart.minusWeeks(1)
 
@@ -98,7 +105,9 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
                     program = program,
                     session = selectedSession,
                     existing = logForSession,
+                    movedFrom = selectedSession?.let { movedFrom(it, selected, moves) },
                     onSelectPlan = { vm.workouts.openPlan(selected) },
+                    onMove = { showMove = true },
                     onStart = {
                         if (selectedSession != null) vm.workouts.startOrOpenSession(selected, selectedSession)
                         else vm.workouts.startOutsidePlan(selected)
@@ -106,6 +115,24 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
                     onOpen = { log -> vm.workouts.openExisting(log) },
                     onLoadProgram = { vm.workouts.openProgram() },
                 )
+            }
+
+            val otherLogs = dayLogs.filter { it.id != logForSession?.id }
+            if (otherLogs.isNotEmpty()) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Ещё в этот день", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Palette.muted)
+                        otherLogs.forEach { log ->
+                            val names = log.exercises.map { it.name }.filter { it.isNotBlank() }
+                            ScheduleRow(
+                                whenText = names.joinToString(", ").ifBlank { "Без упражнений" },
+                                name = log.sessionName,
+                                trailing = log.markLabel(),
+                                onClick = { vm.workouts.openExisting(log) },
+                            )
+                        }
+                    }
+                }
             }
 
             if (upcoming.isNotEmpty()) {
@@ -164,6 +191,19 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
                 }
             }
         }
+        val currentProgram = program
+        if (showMove && selectedSession != null && currentProgram != null) {
+            MoveWorkoutDialog(
+                sessionName = selectedSession.name,
+                from = selected,
+                occupied = { d -> sessionOn(currentProgram, moves, d)?.name },
+                onPick = {
+                    showMove = false
+                    vm.workouts.moveSession(selected, it)
+                },
+                onDismiss = { showMove = false },
+            )
+        }
     }
 }
 
@@ -174,7 +214,9 @@ private fun SelectedDayCard(
     program: WorkoutProgram?,
     session: ProgramSession?,
     existing: WorkoutLog?,
+    movedFrom: LocalDate?,
     onSelectPlan: () -> Unit,
+    onMove: () -> Unit,
     onStart: () -> Unit,
     onOpen: (WorkoutLog) -> Unit,
     onLoadProgram: () -> Unit,
@@ -252,7 +294,14 @@ private fun SelectedDayCard(
                         color = Palette.muted,
                     )
                 }
-                SecondaryButton("Посмотреть план", onClick = onSelectPlan)
+                if (movedFrom != null) {
+                    Text(
+                        "Перенесено с ${Ru.weekdayDayMonth(movedFrom)}. В программе день не меняется.",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Palette.muted,
+                    )
+                }
                 when {
                     existing != null ->
                         PrimaryButton("Продолжить тренировку", onClick = { onOpen(existing) })
@@ -260,6 +309,8 @@ private fun SelectedDayCard(
                         InfoBanner("Тренировку можно начать, когда наступит этот день.")
                     else -> PrimaryButton("Начать", onClick = onStart)
                 }
+                SecondaryButton("Посмотреть план", onClick = onSelectPlan)
+                SecondaryButton("Перенести", onClick = onMove)
             }
         }
     }
@@ -362,6 +413,52 @@ fun MetaChip(text: String) {
             .clip(RoundedCornerShape(10.dp))
             .background(Palette.accentSoft)
             .padding(horizontal = 10.dp, vertical = 5.dp),
+    )
+}
+
+@Composable
+internal fun MoveWorkoutDialog(
+    sessionName: String,
+    from: LocalDate,
+    occupied: (LocalDate) -> String?,
+    onPick: (LocalDate) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val week = from.weekStart()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Palette.surface,
+        title = { Text("Перенести «$sessionName»", fontWeight = FontWeight.Bold, color = Palette.ink) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Только на эту неделю. На следующей неделе занятие снова в свой день.",
+                    fontSize = 13.sp,
+                    color = Palette.muted,
+                )
+                (0..6).map { week.plusDays(it.toLong()) }.filter { it != from }.forEach { day ->
+                    val other = occupied(day)
+                    val shape = RoundedCornerShape(12.dp)
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(shape)
+                            .border(1.dp, Palette.line, shape)
+                            .clickable { onPick(day) }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                    ) {
+                        Text(Ru.weekdayDayMonth(day), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Palette.ink)
+                        Text(
+                            if (other == null) "День отдыха" else "Поменяются местами с «$other»",
+                            fontSize = 12.sp,
+                            color = Palette.muted,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Закрыть", color = Palette.muted) } },
     )
 }
 

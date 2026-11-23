@@ -7,78 +7,158 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.mydietolog.data.DayMarks
 import kotlin.math.roundToInt
 
+private enum class MarkScale { HUNGER, STRESS }
+
 @Composable
 fun DayMarksCard(marks: DayMarks?, onChange: ((DayMarks) -> DayMarks) -> Unit) {
-    val shape = RoundedCornerShape(20.dp)
+    var scale by remember { mutableStateOf<MarkScale?>(null) }
+    val shape = RoundedCornerShape(22.dp)
     Column(
         Modifier
             .fillMaxWidth()
             .clip(shape)
             .background(Palette.surface)
             .border(1.dp, Palette.line, shape)
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 8.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("Отметки дня", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Palette.ink)
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "Месячные",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Palette.inkSoft,
-                modifier = Modifier.weight(1f),
+        Text(
+            "Отметки дня",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = Palette.muted,
+            modifier = Modifier.padding(start = 8.dp),
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            MarkCircle(
+                title = "Месячные",
+                value = when (marks?.menstruation) {
+                    true -> "да"
+                    false -> "нет"
+                    null -> "+"
+                },
+                filled = marks?.menstruation != null,
+                caption = when (marks?.menstruation) {
+                    true -> "да"
+                    false -> "нет"
+                    null -> "Добавить"
+                },
+                onClick = {
+                    scale = null
+                    onChange { m ->
+                        m.copy(
+                            menstruation = when (m.menstruation) {
+                                null -> true
+                                true -> false
+                                false -> null
+                            },
+                        )
+                    }
+                },
             )
-            ChoiceChip("Да", selected = marks?.menstruation == true) {
-                onChange { m -> m.copy(menstruation = if (m.menstruation == true) null else true) }
-            }
-            Spacer(Modifier.width(6.dp))
-            ChoiceChip("Нет", selected = marks?.menstruation == false) {
-                onChange { m -> m.copy(menstruation = if (m.menstruation == false) null else false) }
-            }
+            MarkCircle(
+                title = "Голод",
+                value = marks?.hunger?.toString() ?: "+",
+                filled = marks?.hunger != null,
+                caption = marks?.hunger?.let { "$it из ${DayMarks.SCALE_MAX}" } ?: "Добавить",
+                onClick = { scale = if (scale == MarkScale.HUNGER) null else MarkScale.HUNGER },
+            )
+            MarkCircle(
+                title = "Стресс",
+                value = marks?.stress?.toString() ?: "+",
+                filled = marks?.stress != null,
+                caption = marks?.stress?.let { "$it из ${DayMarks.SCALE_MAX}" } ?: "Добавить",
+                onClick = { scale = if (scale == MarkScale.STRESS) null else MarkScale.STRESS },
+            )
         }
-
-        ScaleRow("Голод", marks?.hunger) { value -> onChange { m -> m.copy(hunger = value) } }
-        ScaleRow("Стресс", marks?.stress) { value -> onChange { m -> m.copy(stress = value) } }
+        if (scale != null) {
+            val value = if (scale == MarkScale.HUNGER) marks?.hunger else marks?.stress
+            ScaleEditor(
+                label = if (scale == MarkScale.HUNGER) "Голод" else "Стресс",
+                value = value,
+                onValue = { next ->
+                    onChange { m ->
+                        if (scale == MarkScale.HUNGER) m.copy(hunger = next) else m.copy(stress = next)
+                    }
+                },
+            )
+        }
     }
 }
 
 @Composable
-private fun ScaleRow(label: String, value: Int?, onValue: (Int?) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+private fun MarkCircle(
+    title: String,
+    value: String,
+    filled: Boolean,
+    caption: String,
+    onClick: () -> Unit,
+) {
+    Column(
+        Modifier.clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier
+                .size(68.dp)
+                .clip(CircleShape)
+                .background(if (filled) Palette.accent else Palette.placeholder),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                value,
+                fontSize = if (value == "+") 28.sp else 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (filled) Color.White else Palette.ink,
+                textAlign = TextAlign.Center,
+            )
+        }
+        Text(
+            title,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = Palette.ink,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Text(caption, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted)
+    }
+}
+
+@Composable
+private fun ScaleEditor(label: String, value: Int?, onValue: (Int?) -> Unit) {
+    Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 label,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Palette.inkSoft,
                 modifier = Modifier.weight(1f),
-            )
-            Text(
-                if (value == null) "не отмечено" else "$value из ${DayMarks.SCALE_MAX}",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = Palette.muted,
             )
             if (value != null) {
                 TextButton(onClick = { onValue(null) }) {

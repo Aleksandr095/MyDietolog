@@ -289,7 +289,6 @@ private fun DishCard(vm: AppViewModel, dish: DishDraft, index: Int, onAddPhoto: 
             .padding(10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        // Фото (до 2)
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             dish.photos.forEachIndexed { pi, name ->
                 Box {
@@ -343,7 +342,6 @@ private fun DishCard(vm: AppViewModel, dish: DishDraft, index: Int, onAddPhoto: 
             Text("${dish.photos.size} из $MAX_PHOTOS_PER_DISH", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted)
         }
 
-        // Поля
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Блюдо ${index + 1}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Palette.muted, modifier = Modifier.weight(1f))

@@ -52,7 +52,6 @@ fun WorkoutSessionScreen(vm: AppViewModel) {
         ScreenHeader(
             title = draft.sessionName,
             subtitle = "${Ru.weekdayDayMonth(draft.date)} · факт можно править",
-            onBack = { vm.workouts.cancel() },
         )
 
         LazyColumn(
@@ -106,10 +105,17 @@ fun WorkoutSessionScreen(vm: AppViewModel) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (draft.sessionId != null) {
-                SecondaryButton("Отметить плановые выполненными", onClick = { vm.workouts.markPlannedDone() })
+                PrimaryButton("Выполнено", onClick = { vm.workouts.markPlannedDone() }, icon = AppIcons.check)
             }
-            PrimaryButton("Завершить тренировку", onClick = { vm.workouts.finish() }, icon = AppIcons.check)
-            SecondaryButton("Отменить без сохранения", onClick = { vm.workouts.cancel() })
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PrimaryButton(
+                    "Завершить",
+                    onClick = { vm.workouts.finish() },
+                    icon = AppIcons.check,
+                    modifier = Modifier.weight(1f),
+                )
+                SecondaryButton("Отменить", onClick = { vm.workouts.cancel() }, modifier = Modifier.weight(1f))
+            }
         }
     }
 }

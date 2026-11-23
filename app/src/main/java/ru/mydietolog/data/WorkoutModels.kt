@@ -98,6 +98,48 @@ data class WorkoutProgram(
     }
 }
 
+/** Одно занятие сдвинуто с дня по программе на другую дату. Файл программы не меняется. */
+data class SessionMove(
+    val sessionId: String,
+    val origin: LocalDate,
+    val date: LocalDate,
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("session_id", sessionId)
+        put("origin", origin.toString())
+        put("date", date.toString())
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject): SessionMove = SessionMove(
+            sessionId = o.getString("session_id"),
+            origin = LocalDate.parse(o.getString("origin")),
+            date = LocalDate.parse(o.getString("date")),
+        )
+    }
+}
+
+fun programOrigin(session: ProgramSession, dateInWeek: LocalDate): LocalDate =
+    dateInWeek.weekStart().plusDays((session.weekday - 1).toLong())
+
+/** Занятие на дату с учётом переносов внутри недели. */
+fun sessionOn(program: WorkoutProgram, moves: List<SessionMove>, date: LocalDate): ProgramSession? {
+    moves.firstOrNull { it.date == date }?.let { move ->
+        program.sessions.firstOrNull { it.id == move.sessionId }?.let { return it }
+    }
+    val natural = program.sessionFor(date) ?: return null
+    val origin = programOrigin(natural, date)
+    val movedAway = moves.any { it.sessionId == natural.id && it.origin == origin && it.date != origin }
+    return if (movedAway) null else natural
+}
+
+/** День по программе, если это занятие стоит на другой дате. */
+fun movedFrom(session: ProgramSession, date: LocalDate, moves: List<SessionMove>): LocalDate? {
+    val origin = programOrigin(session, date)
+    val moved = moves.any { it.sessionId == session.id && it.origin == origin && it.date == date && date != origin }
+    return if (moved) origin else null
+}
+
 data class SetLog(
     val weightKg: Float? = null,
     val reps: Int? = null,
@@ -185,13 +227,22 @@ data class WorkoutLog(
     val sessionName: String,
     val exercises: List<ExerciseLog> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
+    /** Тренировка не выполняется, запись остаётся. */
+    val cancelled: Boolean = false,
 ) {
     val doneCount: Int get() = exercises.count { it.done }
     val isFullyDone: Boolean get() = exercises.isNotEmpty() && exercises.all { it.done }
     val isPartial: Boolean get() = doneCount > 0 && !isFullyDone
     val hasProgress: Boolean get() = exercises.any { it.done || it.sets.any { s -> s.done } || (it.minutes ?: 0) > 0 }
 
+    /** Есть что сохранять: название, вес, повторы или отметка. */
+    val hasContent: Boolean get() = exercises.any { ex ->
+        ex.name.isNotBlank() || ex.done || (ex.minutes ?: 0) > 0 ||
+            ex.sets.any { s -> s.done || s.reps != null || s.weightKg != null }
+    }
+
     fun markLabel(): String = when {
+        cancelled -> "отменена"
         isFullyDone -> "сделано"
         isPartial || hasProgress -> "частично"
         else -> "есть запись"
@@ -203,6 +254,7 @@ data class WorkoutLog(
         put("session_id", sessionId ?: JSONObject.NULL)
         put("session_name", sessionName)
         put("created_at", createdAt)
+        put("cancelled", cancelled)
         put("exercises", JSONArray(exercises.map { it.toJson() }))
     }
 
@@ -230,6 +282,7 @@ data class WorkoutLog(
             sessionId = o.optStringOrNull("session_id"),
             sessionName = o.optString("session_name", "Тренировка"),
             createdAt = o.optLong("created_at", 0L),
+            cancelled = o.optBoolean("cancelled", false),
             exercises = o.optJSONArray("exercises")?.mapObjects { ExerciseLog.fromJson(it) }.orEmpty(),
         )
     }

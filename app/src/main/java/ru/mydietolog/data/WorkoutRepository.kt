@@ -16,12 +16,14 @@ import java.time.LocalDate
  * Программа — из файла пользователя (program.json).
  * Факты тренировок — workout_logs.json.
  * Кэш имён своих упражнений — exercise_names.json.
+ * Переносы занятий внутри недели — workout_moves.json. Программу не меняют.
  */
 class WorkoutRepository(private val context: Context) {
 
     private val programFile = File(context.filesDir, "program.json")
     private val logsFile = File(context.filesDir, "workout_logs.json")
     private val namesFile = File(context.filesDir, "exercise_names.json")
+    private val movesFile = File(context.filesDir, "workout_moves.json")
 
     private val _program = MutableStateFlow<WorkoutProgram?>(null)
     val program: StateFlow<WorkoutProgram?> = _program.asStateFlow()
@@ -31,6 +33,9 @@ class WorkoutRepository(private val context: Context) {
 
     private val _customNames = MutableStateFlow<List<String>>(emptyList())
     val customNames: StateFlow<List<String>> = _customNames.asStateFlow()
+
+    private val _moves = MutableStateFlow<List<SessionMove>>(emptyList())
+    val moves: StateFlow<List<SessionMove>> = _moves.asStateFlow()
 
     suspend fun load(): Unit = withContext(Dispatchers.IO) {
         _program.value = runCatching {
@@ -51,6 +56,16 @@ class WorkoutRepository(private val context: Context) {
             else {
                 val arr = JSONArray(namesFile.readText())
                 (0 until arr.length()).map { arr.getString(it) }
+            }
+        }.getOrElse { emptyList() }
+
+        _moves.value = runCatching {
+            if (!movesFile.exists()) emptyList()
+            else {
+                val arr = JSONObject(movesFile.readText()).optJSONArray("moves") ?: JSONArray()
+                (0 until arr.length()).mapNotNull { i ->
+                    runCatching { SessionMove.fromJson(arr.getJSONObject(i)) }.getOrNull()
+                }
             }
         }.getOrElse { emptyList() }
     }
@@ -101,11 +116,43 @@ class WorkoutRepository(private val context: Context) {
         WorkoutProgram.fromJson(json, fileName = displayName).copy(loadedAt = System.currentTimeMillis())
     }
 
-    /** Заменяет программу. Логи и «в прошлый раз» не трогаем. */
+    /** Записывает программу, которую поправили в приложении. Переносы чужих дней недели убирает. */
+    suspend fun saveProgram(program: WorkoutProgram) {
+        val stored = program.copy(loadedAt = System.currentTimeMillis())
+        _program.value = stored
+        val validMoves = _moves.value.filter { move ->
+            val session = stored.sessions.firstOrNull { it.id == move.sessionId } ?: return@filter false
+            move.origin.dayOfWeek.value == session.weekday
+        }
+        _moves.value = validMoves
+        withContext(Dispatchers.IO) {
+            programFile.writeAtomic(stored.toJson().toString())
+            persistMoves(validMoves)
+        }
+    }
+
+    /** Заменяет программу. Логи и «в прошлый раз» не трогаем. Переносы сбрасываем: дни в новом файле свои. */
     suspend fun replaceProgram(program: WorkoutProgram) {
         val stored = program.copy(loadedAt = System.currentTimeMillis())
         _program.value = stored
-        withContext(Dispatchers.IO) { programFile.writeAtomic(stored.toJson().toString()) }
+        _moves.value = emptyList()
+        withContext(Dispatchers.IO) {
+            programFile.writeAtomic(stored.toJson().toString())
+            persistMoves(emptyList())
+        }
+    }
+
+    suspend fun saveMoves(moves: List<SessionMove>) {
+        _moves.value = moves
+        persistMoves(moves)
+    }
+
+    /** Меняет даты фактов одним сохранением: id лога → новая дата. */
+    suspend fun redateLogs(changes: Map<String, LocalDate>) {
+        if (changes.isEmpty()) return
+        val updated = _logs.value.map { log -> changes[log.id]?.let { log.copy(date = it) } ?: log }
+        _logs.value = updated
+        persistLogs(updated)
     }
 
     suspend fun rememberCustomName(name: String) {
@@ -133,5 +180,13 @@ class WorkoutRepository(private val context: Context) {
 
     private suspend fun persistNames(list: List<String>) = withContext(Dispatchers.IO) {
         namesFile.writeAtomic(JSONArray(list).toString())
+    }
+
+    private suspend fun persistMoves(list: List<SessionMove>) = withContext(Dispatchers.IO) {
+        val root = JSONObject().apply {
+            put("version", 1)
+            put("moves", JSONArray(list.map { it.toJson() }))
+        }
+        movesFile.writeAtomic(root.toString())
     }
 }

@@ -70,6 +70,8 @@ fun WorkoutProgramScreen(vm: AppViewModel) {
                 emptyText = "Программа не загружена. Выберите JSON-файл.",
             )
 
+            SecondaryButton("Изменить план", onClick = { vm.workouts.openProgramEditor() })
+
             SecondaryButton(
                 "Выбрать файл программы…",
                 onClick = {

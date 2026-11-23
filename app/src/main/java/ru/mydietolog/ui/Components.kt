@@ -117,7 +117,7 @@ fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
-            .fillMaxWidth()
+            .then(Modifier.fillMaxWidth())
             .height(48.dp),
         shape = RoundedCornerShape(16.dp),
         colors = ButtonDefaults.outlinedButtonColors(containerColor = Palette.surface, contentColor = Palette.ink),

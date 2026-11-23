@@ -148,25 +148,28 @@ fun DayScreen(vm: AppViewModel) {
             Text("$filled из 4", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted)
         }
 
-        // Приёмы пищи
-        val rows = buildList {
-            MealType.entries.forEach { t ->
-                val ofType = dayMeals.filter { it.type == t }
-                ofType.forEach { add(it to t) }
-                if (ofType.isEmpty() || t == MealType.SNACK) add(null to t)
-            }
+        val circleOrder = listOf(MealType.BREAKFAST, MealType.LUNCH, MealType.SNACK, MealType.DINNER)
+        val extras = dayMeals.filter { meal ->
+            dayMeals.firstOrNull { it.type == meal.type }?.id != meal.id
         }
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            item(key = "meal_circles_$date") {
+                MealCircleRow(
+                    meals = dayMeals,
+                    order = circleOrder,
+                    onOpen = { vm.openMeal(it) },
+                    onAdd = { vm.openNewMeal(it) },
+                )
+            }
+            items(extras, key = { it.id }) { meal ->
+                MealCard(vm, meal) { vm.openMeal(meal) }
+            }
             item(key = "day_marks_$date") {
                 DayMarksCard(dayMarks) { change -> vm.updateMarks(date, change) }
-            }
-            items(rows, key = { (m, t) -> m?.id ?: "empty_${t.code}" }) { (meal, type) ->
-                if (meal != null) MealCard(vm, meal) { vm.openMeal(meal) }
-                else EmptyMealCard(type) { vm.openNewMeal(type) }
             }
         }
 
@@ -178,6 +181,99 @@ fun DayScreen(vm: AppViewModel) {
                 dark = true,
             )
         }
+    }
+}
+
+@Composable
+private fun MealCircleRow(
+    meals: List<Meal>,
+    order: List<MealType>,
+    onOpen: (Meal) -> Unit,
+    onAdd: (MealType) -> Unit,
+) {
+    val shape = RoundedCornerShape(22.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Palette.surface)
+            .border(1.dp, Palette.line, shape)
+            .padding(horizontal = 8.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        order.forEach { type ->
+            val ofType = meals.filter { it.type == type }
+            MealCircle(
+                type = type,
+                meals = ofType,
+                onOpen = onOpen,
+                onAdd = { onAdd(type) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun MealCircle(
+    type: MealType,
+    meals: List<Meal>,
+    onOpen: (Meal) -> Unit,
+    onAdd: () -> Unit,
+    modifier: Modifier,
+) {
+    val meal = meals.firstOrNull()
+    val caption = when {
+        meal == null -> "Добавить"
+        meals.size > 1 -> "${meals.size} ${Ru.plural(meals.size, "запись", "записи", "записей")}"
+        else -> meal.dishes.map { it.description }.firstOrNull { it.isNotBlank() }?.let { line ->
+            if (line.length > 18) line.take(17) + "…" else line
+        } ?: meal.totalKcal?.let { "$it ккал" } ?: "Открыть"
+    }
+    Column(
+        modifier.clickable { if (meal == null) onAdd() else onOpen(meal) },
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.size(76.dp), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .size(68.dp)
+                    .clip(CircleShape)
+                    .background(if (meal == null) Palette.placeholder else Palette.accent),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (meal != null) {
+                    Icon(AppIcons.check, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                }
+            }
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(Palette.ink)
+                    .clickable(onClick = onAdd),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(AppIcons.add, contentDescription = "Добавить ${type.title}", tint = Color.White, modifier = Modifier.size(14.dp))
+            }
+        }
+        Text(
+            type.title,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = Palette.ink,
+            modifier = Modifier.padding(top = 8.dp),
+            maxLines = 1,
+        )
+        Text(
+            caption,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Palette.muted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -227,37 +323,3 @@ private fun MealCard(vm: AppViewModel, meal: Meal, onClick: () -> Unit) {
     }
 }
 
-@Composable
-private fun EmptyMealCard(type: MealType, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(20.dp)
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(64.dp)
-            .clip(shape)
-            .dashedBorder(Palette.field, 20.dp)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(Palette.accentSoft),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(AppIcons.add, contentDescription = null, tint = Palette.accent, modifier = Modifier.size(20.dp))
-        }
-        Text(
-            type.title,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            color = Palette.ink,
-            modifier = Modifier
-                .padding(start = 12.dp)
-                .weight(1f),
-        )
-        Text("добавить", fontSize = 13.sp, color = Palette.muted)
-    }
-}
