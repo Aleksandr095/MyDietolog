@@ -1,5 +1,6 @@
 package ru.mydietolog
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -11,9 +12,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import ru.mydietolog.ui.AppViewModel
+import java.time.LocalDate
 import ru.mydietolog.ui.BottomTabBar
 import ru.mydietolog.ui.CustomExerciseScreen
 import ru.mydietolog.ui.DayScreen
+import ru.mydietolog.reminders.ReminderNotifier
 import ru.mydietolog.ui.ExportScreen
 import ru.mydietolog.ui.MainTab
 import ru.mydietolog.ui.MealEditScreen
@@ -21,6 +24,7 @@ import ru.mydietolog.ui.MonthScreen
 import ru.mydietolog.ui.MyDietologTheme
 import ru.mydietolog.ui.Palette
 import ru.mydietolog.ui.Screen
+import ru.mydietolog.ui.SettingsScreen
 import ru.mydietolog.ui.WorkoutProgramScreen
 import ru.mydietolog.ui.WorkoutSessionScreen
 import ru.mydietolog.ui.WorkoutsHomeScreen
@@ -31,6 +35,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) openFromIntent(intent)
         setContent {
             MyDietologTheme {
                 val screen = vm.current
@@ -54,6 +59,7 @@ class MainActivity : ComponentActivity() {
                             Screen.WorkoutSession -> WorkoutSessionScreen(vm)
                             Screen.WorkoutProgram -> WorkoutProgramScreen(vm)
                             Screen.CustomExercise -> CustomExerciseScreen(vm)
+                            Screen.Settings -> SettingsScreen(vm)
                         }
                     }
                     if (showTabs) {
@@ -62,5 +68,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        openFromIntent(intent)
+    }
+
+    private fun openFromIntent(intent: Intent?) {
+        val date = intent?.getStringExtra(ReminderNotifier.EXTRA_OPEN_DATE)
+            ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            ?: return
+        vm.openDay(date)
     }
 }
