@@ -10,6 +10,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.time.LocalDate
+import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -17,11 +18,13 @@ data class DaySummary(
     val date: LocalDate,
     val meals: List<Meal>,
     val workouts: List<WorkoutLog> = emptyList(),
+    val marks: DayMarks? = null,
 ) {
     val photoCount get() = meals.sumOf { it.photoCount }
     val missingMain: List<MealType>
         get() = MealType.main.filter { t -> meals.none { it.type == t } }
-    val hasContent: Boolean get() = meals.isNotEmpty() || workouts.isNotEmpty()
+    val hasMarks: Boolean get() = marks?.isEmpty == false
+    val hasContent: Boolean get() = meals.isNotEmpty() || workouts.isNotEmpty() || hasMarks
 }
 
 data class WeekSummary(val start: LocalDate, val days: List<DaySummary>) {
@@ -29,6 +32,10 @@ data class WeekSummary(val start: LocalDate, val days: List<DaySummary>) {
     val mealCount get() = days.sumOf { it.meals.size }
     val photoCount get() = days.sumOf { it.photoCount }
     val workoutCount get() = days.sumOf { it.workouts.size }
+
+    val hungerAverage: Average? get() = days.map { it.marks?.hunger }.averageOrNull()
+    val stressAverage: Average? get() = days.map { it.marks?.stress }.averageOrNull()
+    val menstruationDays: Int get() = days.count { it.marks?.menstruation == true }
 
     /** Дни, которые уже наступили (или сегодня) и в которых нет завтрака, обеда или ужина. */
     fun incompleteDays(today: LocalDate): List<DaySummary> =
@@ -39,6 +46,7 @@ data class WeekSummary(val start: LocalDate, val days: List<DaySummary>) {
             start: LocalDate,
             meals: List<Meal>,
             workouts: List<WorkoutLog> = emptyList(),
+            marks: List<DayMarks> = emptyList(),
         ): WeekSummary = WeekSummary(
             start,
             (0..6).map { i ->
@@ -47,6 +55,7 @@ data class WeekSummary(val start: LocalDate, val days: List<DaySummary>) {
                     date = d,
                     meals = meals.filter { it.date == d }.sortedWith(Repository.mealOrder),
                     workouts = workouts.filter { it.date == d }.sortedBy { it.createdAt },
+                    marks = marks.firstOrNull { it.date == d },
                 )
             },
         )
@@ -126,6 +135,7 @@ class Exporter(private val context: Context, private val repo: Repository) {
             "Приёмов пищи: ${week.mealCount}, фото: ${week.photoCount}, " +
                 "тренировок: ${week.workoutCount}.",
         )
+        weekMarksSummary(week)?.let { appendLine(it) }
         appendLine("Калории в этом файле — оценка пользователя, не измерение.")
         appendLine()
         week.days.forEach { day ->
@@ -140,6 +150,7 @@ class Exporter(private val context: Context, private val repo: Repository) {
             }
             val dayKcal = day.meals.mapNotNull { it.totalKcal }
             if (dayKcal.isNotEmpty()) appendLine("Оценка за день (сумма указанного): ${dayKcal.sum()} ккал")
+            day.marks?.takeIf { !it.isEmpty }?.let { appendLine("Отметки: ${marksLine(it)}") }
             appendLine()
 
             if (day.meals.isNotEmpty()) {
@@ -172,6 +183,25 @@ class Exporter(private val context: Context, private val repo: Repository) {
             }
         }
     }
+
+    private fun weekMarksSummary(week: WeekSummary): String? {
+        val parts = buildList {
+            week.hungerAverage?.let { add("голод — среднее ${formatAverage(it)} из ${DayMarks.SCALE_MAX} (дней: ${it.days})") }
+            week.stressAverage?.let { add("стресс — среднее ${formatAverage(it)} из ${DayMarks.SCALE_MAX} (дней: ${it.days})") }
+            if (week.menstruationDays > 0) add("месячные — ${week.menstruationDays} ${Ru.plural(week.menstruationDays, "день", "дня", "дней")}")
+        }
+        return if (parts.isEmpty()) null else "Отметки за неделю: ${parts.joinToString("; ")}."
+    }
+
+    private fun marksLine(marks: DayMarks): String = buildList {
+        marks.menstruation?.let { add("месячные — ${if (it) "да" else "нет"}") }
+        marks.hunger?.let { add("голод $it/${DayMarks.SCALE_MAX}") }
+        marks.stress?.let { add("стресс $it/${DayMarks.SCALE_MAX}") }
+    }.joinToString(" · ")
+
+    private fun formatAverage(a: Average): String = String.format(Locale.forLanguageTag("ru"), "%.1f", a.value)
+
+    private fun roundOne(value: Double): Double = Math.round(value * 10) / 10.0
 
     private fun StringBuilder.appendWorkoutMarkdown(workout: WorkoutLog) {
         val head = buildList {
@@ -217,16 +247,30 @@ class Exporter(private val context: Context, private val repo: Repository) {
     private fun json(week: WeekSummary, today: LocalDate, photoNames: Map<String, String>): JSONObject =
         JSONObject().apply {
             put("app", "MyDietolog")
-            put("format_version", 2)
+            put("format_version", 3)
             put("week_start", week.start.toString())
             put("week_end", week.end.toString())
-            put("note", "kcal — оценка пользователя; workouts — факты тренировок")
+            put("note", "kcal — оценка пользователя; workouts — факты тренировок; marks — отметки дня (шкала 0–10)")
+            put("marks_summary", JSONObject().apply {
+                put("hunger_average", week.hungerAverage?.let { roundOne(it.value) } ?: JSONObject.NULL)
+                put("hunger_days", week.hungerAverage?.days ?: 0)
+                put("stress_average", week.stressAverage?.let { roundOne(it.value) } ?: JSONObject.NULL)
+                put("stress_days", week.stressAverage?.days ?: 0)
+                put("menstruation_days", week.menstruationDays)
+            })
             put("days", JSONArray(week.days.map { day ->
                 JSONObject().apply {
                     put("date", day.date.toString())
                     put("future", day.date.isAfter(today))
                     put("incomplete", !day.date.isAfter(today) && day.missingMain.isNotEmpty())
                     put("missing", JSONArray(day.missingMain.map { it.code }))
+                    put("marks", day.marks?.takeIf { !it.isEmpty }?.let { m ->
+                        JSONObject().apply {
+                            put("menstruation", m.menstruation ?: JSONObject.NULL)
+                            put("hunger", m.hunger ?: JSONObject.NULL)
+                            put("stress", m.stress ?: JSONObject.NULL)
+                        }
+                    } ?: JSONObject.NULL)
                     put("meals", JSONArray(day.meals.map { meal ->
                         JSONObject().apply {
                             put("type", meal.type.code)

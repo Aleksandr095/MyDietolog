@@ -21,23 +21,14 @@ import java.util.UUID
  */
 class Repository(private val context: Context) {
 
-    private val dataFile = File(context.filesDir, "meals.json")
+    private val dataFile = File(context.filesDir, MEALS_FILE)
     val photosDir: File = File(context.filesDir, "photos").apply { mkdirs() }
 
     private val _meals = MutableStateFlow<List<Meal>>(emptyList())
     val meals: StateFlow<List<Meal>> = _meals.asStateFlow()
 
     suspend fun load(): Unit = withContext(Dispatchers.IO) {
-        val list = runCatching {
-            if (!dataFile.exists()) emptyList()
-            else {
-                val root = JSONObject(dataFile.readText())
-                val arr = root.optJSONArray("meals") ?: JSONArray()
-                (0 until arr.length()).mapNotNull { i ->
-                    runCatching { Meal.fromJson(arr.getJSONObject(i)) }.getOrNull()
-                }
-            }
-        }.getOrElse { emptyList() }
+        val list = readFile(dataFile)
         _meals.value = list
         cleanupOrphanPhotos(list)
     }
@@ -116,7 +107,22 @@ class Repository(private val context: Context) {
 
     companion object {
         private const val MAX_SIDE = 1600
+        private const val MEALS_FILE = "meals.json"
 
         val mealOrder: Comparator<Meal> = compareBy<Meal>({ it.type.ordinal }, { it.time ?: "99:99" }, { it.createdAt })
+
+        /** Читает записи без побочных действий (например, без очистки фото) — для фоновых приёмников. */
+        fun readStored(context: Context): List<Meal> = readFile(File(context.filesDir, MEALS_FILE))
+
+        private fun readFile(file: File): List<Meal> = runCatching {
+            if (!file.exists()) emptyList()
+            else {
+                val root = JSONObject(file.readText())
+                val arr = root.optJSONArray("meals") ?: JSONArray()
+                (0 until arr.length()).mapNotNull { i ->
+                    runCatching { Meal.fromJson(arr.getJSONObject(i)) }.getOrNull()
+                }
+            }
+        }.getOrElse { emptyList() }
     }
 }
