@@ -43,12 +43,13 @@ import java.time.LocalDate
 fun ExportScreen(vm: AppViewModel, initialStart: LocalDate) {
     val all by vm.meals.collectAsState()
     val workouts by vm.workouts.logs.collectAsState()
+    val marks by vm.marks.collectAsState()
     var start by remember { mutableStateOf(initialStart) }
     val context = LocalContext.current
     val today = vm.today()
-    val week = WeekSummary.build(start, all, workouts)
+    val week = WeekSummary.build(start, all, workouts, marks)
     val incomplete = week.incompleteDays(today)
-    val canExport = week.mealCount > 0 || week.workoutCount > 0
+    val canExport = week.mealCount > 0 || week.workoutCount > 0 || week.days.any { it.hasMarks }
 
     Column(Modifier.fillMaxSize().background(Palette.bg)) {
         ScreenHeader(title = "Выгрузка недели", onBack = { vm.back() })
@@ -124,7 +125,7 @@ fun ExportScreen(vm: AppViewModel, initialStart: LocalDate) {
             ) {
                 Icon(AppIcons.download, contentDescription = null, tint = Palette.muted, modifier = Modifier.size(20.dp))
                 Text(
-                    "${vm.exportFileName(week)}\ndiary.md · diary.json · photos/\nпитание + факты тренировок",
+                    "${vm.exportFileName(week)}\ndiary.md · diary.json · photos/\nпитание, тренировки и отметки дня",
                     fontSize = 12.sp,
                     lineHeight = 17.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -170,6 +171,7 @@ private fun dayLineSummary(day: DaySummary): String {
     if (day.workouts.isNotEmpty()) {
         parts += "${day.workouts.size} ${Ru.plural(day.workouts.size, "трен.", "трен.", "трен.")}"
     }
+    if (day.hasMarks) parts += "отметки"
     return parts.joinToString(" · ")
 }
 

@@ -290,7 +290,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
     }
 
     private fun freshWeek(start: LocalDate) =
-        WeekSummary.build(start, meals.value, workouts.logs.value)
+        WeekSummary.build(start, meals.value, workouts.logs.value, marks.value)
 
     private suspend fun buildZip(week: WeekSummary) = exporter.buildZip(freshWeek(week.start), today())
 
