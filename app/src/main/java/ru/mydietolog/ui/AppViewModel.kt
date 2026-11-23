@@ -165,7 +165,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
     fun updateReminders(change: (ReminderSettings) -> ReminderSettings) {
         viewModelScope.launch {
             reminderRepo.update(change)
-            withContext(Dispatchers.IO) { ReminderScheduler.rescheduleAll(getApplication()) }
+            withContext(Dispatchers.IO) { ReminderScheduler.rescheduleAll(getApplication<Application>()) }
         }
     }
 
