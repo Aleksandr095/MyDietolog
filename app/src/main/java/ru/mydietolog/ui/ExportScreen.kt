@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import ru.mydietolog.data.DaySummary
 import ru.mydietolog.data.Ru
 import ru.mydietolog.data.WeekSummary
 import java.io.File
@@ -41,11 +42,13 @@ import java.time.LocalDate
 @Composable
 fun ExportScreen(vm: AppViewModel, initialStart: LocalDate) {
     val all by vm.meals.collectAsState()
+    val workouts by vm.workoutLogs.collectAsState()
     var start by remember { mutableStateOf(initialStart) }
     val context = LocalContext.current
     val today = vm.today()
-    val week = WeekSummary.build(start, all)
+    val week = WeekSummary.build(start, all, workouts)
     val incomplete = week.incompleteDays(today)
+    val canExport = week.mealCount > 0 || week.workoutCount > 0
 
     Column(Modifier.fillMaxSize().background(Palette.bg)) {
         ScreenHeader(title = "Выгрузка недели", onBack = { vm.back() })
@@ -82,7 +85,7 @@ fun ExportScreen(vm: AppViewModel, initialStart: LocalDate) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Stat("7", "дней", Modifier.weight(1f))
                 Stat(week.mealCount.toString(), Ru.plural(week.mealCount, "приём", "приёма", "приёмов"), Modifier.weight(1f))
-                Stat(week.photoCount.toString(), "фото", Modifier.weight(1f))
+                Stat(week.workoutCount.toString(), Ru.plural(week.workoutCount, "тренировка", "тренировки", "тренировок"), Modifier.weight(1f))
             }
 
             Column(
@@ -97,7 +100,7 @@ fun ExportScreen(vm: AppViewModel, initialStart: LocalDate) {
                     Row(Modifier.fillMaxWidth().height(38.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(Ru.shortDay(day.date), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Palette.ink, modifier = Modifier.weight(1f))
                         Text(
-                            if (day.meals.isEmpty()) "нет записей" else "${Ru.meals(day.meals.size)} · ${Ru.photos(day.photoCount)}",
+                            dayLineSummary(day),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Palette.muted,
@@ -121,7 +124,7 @@ fun ExportScreen(vm: AppViewModel, initialStart: LocalDate) {
             ) {
                 Icon(AppIcons.download, contentDescription = null, tint = Palette.muted, modifier = Modifier.size(20.dp))
                 Text(
-                    "${vm.exportFileName(week)}\ndiary.md · diary.json · photos/",
+                    "${vm.exportFileName(week)}\ndiary.md · diary.json · photos/\nпитание + факты тренировок",
                     fontSize = 12.sp,
                     lineHeight = 17.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -138,7 +141,7 @@ fun ExportScreen(vm: AppViewModel, initialStart: LocalDate) {
                 if (vm.busy) "Собираю архив…" else "Создать архив и поделиться",
                 onClick = { vm.export(week) { zip -> share(context, zip) } },
                 icon = AppIcons.share,
-                enabled = !vm.busy && week.mealCount > 0,
+                enabled = !vm.busy && canExport,
             )
             SecondaryButton(
                 "Только сохранить в «Загрузки»",
@@ -151,10 +154,23 @@ fun ExportScreen(vm: AppViewModel, initialStart: LocalDate) {
                         ).show()
                     }
                 },
-                enabled = !vm.busy && week.mealCount > 0,
+                enabled = !vm.busy && canExport,
             )
         }
     }
+}
+
+private fun dayLineSummary(day: DaySummary): String {
+    if (!day.hasContent) return "нет записей"
+    val parts = mutableListOf<String>()
+    if (day.meals.isNotEmpty()) {
+        parts += Ru.meals(day.meals.size)
+        if (day.photoCount > 0) parts += Ru.photos(day.photoCount)
+    }
+    if (day.workouts.isNotEmpty()) {
+        parts += "${day.workouts.size} ${Ru.plural(day.workouts.size, "трен.", "трен.", "трен.")}"
+    }
+    return parts.joinToString(" · ")
 }
 
 @Composable

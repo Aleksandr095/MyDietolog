@@ -287,7 +287,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun photoFile(name: String): File = repo.photoFile(name)
 
-    fun weekSummary(start: LocalDate): WeekSummary = WeekSummary.build(start, meals.value)
+    fun weekSummary(start: LocalDate): WeekSummary =
+        WeekSummary.build(start, meals.value, workoutLogs.value)
 
     fun exportFileName(week: WeekSummary) = exporter.fileName(week)
 
@@ -296,7 +297,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         busy = true
         viewModelScope.launch {
             try {
-                onReady(exporter.buildZip(week, today()))
+                val full = WeekSummary.build(week.start, meals.value, workoutLogs.value)
+                onReady(exporter.buildZip(full, today()))
             } finally {
                 busy = false
             }
@@ -308,7 +310,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         busy = true
         viewModelScope.launch {
             try {
-                val zip = exporter.buildZip(week, today())
+                val full = WeekSummary.build(week.start, meals.value, workoutLogs.value)
+                val zip = exporter.buildZip(full, today())
                 onDone(exporter.saveToDownloads(zip))
             } finally {
                 busy = false

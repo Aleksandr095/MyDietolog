@@ -13,27 +13,41 @@ import java.time.LocalDate
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
-data class DaySummary(val date: LocalDate, val meals: List<Meal>) {
+data class DaySummary(
+    val date: LocalDate,
+    val meals: List<Meal>,
+    val workouts: List<WorkoutLog> = emptyList(),
+) {
     val photoCount get() = meals.sumOf { it.photoCount }
     val missingMain: List<MealType>
         get() = MealType.main.filter { t -> meals.none { it.type == t } }
+    val hasContent: Boolean get() = meals.isNotEmpty() || workouts.isNotEmpty()
 }
 
 data class WeekSummary(val start: LocalDate, val days: List<DaySummary>) {
     val end: LocalDate get() = start.plusDays(6)
     val mealCount get() = days.sumOf { it.meals.size }
     val photoCount get() = days.sumOf { it.photoCount }
+    val workoutCount get() = days.sumOf { it.workouts.size }
 
     /** Дни, которые уже наступили (или сегодня) и в которых нет завтрака, обеда или ужина. */
     fun incompleteDays(today: LocalDate): List<DaySummary> =
         days.filter { !it.date.isAfter(today) && it.missingMain.isNotEmpty() }
 
     companion object {
-        fun build(start: LocalDate, all: List<Meal>): WeekSummary = WeekSummary(
+        fun build(
+            start: LocalDate,
+            meals: List<Meal>,
+            workouts: List<WorkoutLog> = emptyList(),
+        ): WeekSummary = WeekSummary(
             start,
             (0..6).map { i ->
                 val d = start.plusDays(i.toLong())
-                DaySummary(d, all.filter { it.date == d }.sortedWith(Repository.mealOrder))
+                DaySummary(
+                    date = d,
+                    meals = meals.filter { it.date == d }.sortedWith(Repository.mealOrder),
+                    workouts = workouts.filter { it.date == d }.sortedBy { it.createdAt },
+                )
             },
         )
     }
@@ -41,7 +55,7 @@ data class WeekSummary(val start: LocalDate, val days: List<DaySummary>) {
 
 /**
  * Собирает ZIP за неделю:
- *  diary.md   — читаемое описание по дням;
+ *  diary.md   — питание и факты тренировок по дням;
  *  diary.json — те же данные в структурированном виде;
  *  photos/    — фото, имена вида 2026-11-15_lunch_d1_p1.jpg.
  */
@@ -54,7 +68,6 @@ class Exporter(private val context: Context, private val repo: Repository) {
         dir.listFiles()?.forEach { it.delete() }
         val zip = File(dir, fileName(week))
 
-        // Имена фото в архиве
         val photoNames = mutableMapOf<String, String>()
         week.days.forEach { day ->
             val typeCounters = mutableMapOf<MealType, Int>()
@@ -107,50 +120,107 @@ class Exporter(private val context: Context, private val repo: Repository) {
     }
 
     private fun markdown(week: WeekSummary, today: LocalDate, photoNames: Map<String, String>): String = buildString {
-        appendLine("# Дневник питания: ${Ru.weekRange(week.start)}")
+        appendLine("# Дневник: ${Ru.weekRange(week.start)}")
         appendLine()
-        appendLine("Приёмов пищи: ${week.mealCount}, фото: ${week.photoCount}.")
+        appendLine(
+            "Приёмов пищи: ${week.mealCount}, фото: ${week.photoCount}, " +
+                "тренировок: ${week.workoutCount}.",
+        )
         appendLine("Калории в этом файле — оценка пользователя, не измерение.")
         appendLine()
         week.days.forEach { day ->
             appendLine("## ${Ru.weekdayDayMonth(day.date)} (${day.date})")
             when {
                 day.date.isAfter(today) -> appendLine("_День ещё не наступил._")
-                day.meals.isEmpty() -> appendLine("_Нет записей._")
-                day.missingMain.isNotEmpty() ->
-                    appendLine("_Неполный день: нет ${day.missingMain.joinToString(", ") { it.genitive }}._")
+                !day.hasContent -> appendLine("_Нет записей._")
+                day.missingMain.isNotEmpty() && day.meals.isNotEmpty() ->
+                    appendLine("_Неполный день питания: нет ${day.missingMain.joinToString(", ") { it.genitive }}._")
+                day.missingMain.isNotEmpty() && day.meals.isEmpty() && day.workouts.isNotEmpty() ->
+                    appendLine("_Питание не заполнено; есть факт тренировки._")
             }
             val dayKcal = day.meals.mapNotNull { it.totalKcal }
             if (dayKcal.isNotEmpty()) appendLine("Оценка за день (сумма указанного): ${dayKcal.sum()} ккал")
             appendLine()
-            day.meals.forEach { meal ->
-                val head = buildList {
-                    add(meal.type.title)
-                    meal.time?.let { add(it) }
-                    meal.totalKcal?.let { add("моя оценка: $it ккал") }
-                }.joinToString(" · ")
-                appendLine("### $head")
-                meal.dishes.forEachIndexed { i, dish ->
-                    val parts = buildList {
-                        add(dish.description.ifBlank { "(без описания)" })
-                        dish.weightG?.let { add("$it г") }
-                        dish.kcal?.let { add("$it ккал") }
+
+            if (day.meals.isNotEmpty()) {
+                appendLine("### Питание")
+                day.meals.forEach { meal ->
+                    val head = buildList {
+                        add(meal.type.title)
+                        meal.time?.let { add(it) }
+                        meal.totalKcal?.let { add("моя оценка: $it ккал") }
+                    }.joinToString(" · ")
+                    appendLine("#### $head")
+                    meal.dishes.forEachIndexed { i, dish ->
+                        val parts = buildList {
+                            add(dish.description.ifBlank { "(без описания)" })
+                            dish.weightG?.let { add("$it г") }
+                            dish.kcal?.let { add("$it ккал") }
+                        }
+                        appendLine("${i + 1}. ${parts.joinToString(" — ")}")
+                        dish.photos.forEach { p -> photoNames[p]?.let { appendLine("   - фото: $it") } }
                     }
-                    appendLine("${i + 1}. ${parts.joinToString(" — ")}")
-                    dish.photos.forEach { p -> photoNames[p]?.let { appendLine("   - фото: $it") } }
+                    appendLine()
                 }
-                appendLine()
+            }
+
+            if (day.workouts.isNotEmpty()) {
+                appendLine("### Тренировки")
+                day.workouts.forEach { workout ->
+                    appendWorkoutMarkdown(workout)
+                }
             }
         }
+    }
+
+    private fun StringBuilder.appendWorkoutMarkdown(workout: WorkoutLog) {
+        val head = buildList {
+            add(workout.sessionName)
+            add(workout.markLabel())
+            if (workout.sessionId == null) add("вне плана")
+        }.joinToString(" · ")
+        appendLine("#### $head")
+        if (workout.exercises.isEmpty()) {
+            appendLine("_Нет упражнений._")
+            appendLine()
+            return
+        }
+        workout.exercises.forEachIndexed { i, ex ->
+            val status = if (ex.done) "✓" else "○"
+            val tags = buildList {
+                if (ex.isCustom) add("вне плана")
+                if (ex.target.isNotBlank()) add("цель: ${ex.target}")
+            }.joinToString(" · ")
+            appendLine("${i + 1}. $status **${ex.name}**" + if (tags.isNotBlank()) " ($tags)" else "")
+            if (ex.note.isNotBlank()) appendLine("   - заметка: ${ex.note}")
+            when (ex.kind) {
+                ExerciseKind.CARDIO -> {
+                    ex.minutes?.let { appendLine("   - минуты: $it") }
+                }
+                ExerciseKind.STRENGTH -> {
+                    val sets = ex.sets.filter { it.done || it.reps != null || it.weightKg != null }
+                    if (sets.isNotEmpty()) {
+                        val lines = sets.mapIndexed { si, s ->
+                            val w = s.weightKg?.let { "${formatWeight(it)} кг" } ?: "—"
+                            val r = s.reps?.toString() ?: "—"
+                            val mark = if (s.done) "✓" else "○"
+                            "${si + 1}) $w × $r $mark"
+                        }
+                        appendLine("   - подходы: ${lines.joinToString("; ")}")
+                    }
+                }
+            }
+        }
+        appendLine()
     }
 
     private fun json(week: WeekSummary, today: LocalDate, photoNames: Map<String, String>): JSONObject =
         JSONObject().apply {
             put("app", "MyDietolog")
-            put("format_version", 1)
+            put("format_version", 2)
             put("week_start", week.start.toString())
             put("week_end", week.end.toString())
-            put("note", "kcal — оценка пользователя")
+            put("note", "kcal — оценка пользователя; workouts — факты тренировок")
             put("days", JSONArray(week.days.map { day ->
                 JSONObject().apply {
                     put("date", day.date.toString())
@@ -173,7 +243,38 @@ class Exporter(private val context: Context, private val repo: Repository) {
                             }))
                         }
                     }))
+                    put("workouts", JSONArray(day.workouts.map { workoutJson(it) }))
                 }
             }))
         }
+
+    private fun workoutJson(workout: WorkoutLog): JSONObject = JSONObject().apply {
+        put("id", workout.id)
+        put("session_id", workout.sessionId ?: JSONObject.NULL)
+        put("session_name", workout.sessionName)
+        put("outside_plan", workout.sessionId == null)
+        put("status", workout.markLabel())
+        put("created_at", workout.createdAt)
+        put("exercises", JSONArray(workout.exercises.map { ex ->
+            JSONObject().apply {
+                put("id", ex.id)
+                put("exercise_id", ex.exerciseId ?: JSONObject.NULL)
+                put("name", ex.name)
+                put("target", ex.target)
+                put("note", ex.note)
+                put("technique_url", ex.techniqueUrl ?: JSONObject.NULL)
+                put("kind", ex.kind.code)
+                put("is_custom", ex.isCustom)
+                put("done", ex.done)
+                put("minutes", ex.minutes ?: JSONObject.NULL)
+                put("sets", JSONArray(ex.sets.map { s ->
+                    JSONObject().apply {
+                        put("weight_kg", s.weightKg ?: JSONObject.NULL)
+                        put("reps", s.reps ?: JSONObject.NULL)
+                        put("done", s.done)
+                    }
+                }))
+            }
+        }))
+    }
 }
