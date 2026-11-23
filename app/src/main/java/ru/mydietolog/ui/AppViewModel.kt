@@ -42,7 +42,9 @@ sealed interface Screen {
 
     data object WorkoutsHome : Screen
     data object WorkoutSession : Screen
+    data class WorkoutPlan(val date: LocalDate) : Screen
     data object WorkoutProgram : Screen
+    data object ProgramEdit : Screen
     data object CustomExercise : Screen
 }
 
@@ -174,7 +176,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
     fun selectTab(t: MainTab) {
         if (tab == t) return
         if (tab == MainTab.DIARY && current is Screen.Edit) saveDraft()
-        if (tab == MainTab.WORKOUTS && current is Screen.WorkoutSession) workouts.save()
+        if (tab == MainTab.WORKOUTS && current is Screen.WorkoutSession) workouts.finish()
         tab = t
     }
 
@@ -190,7 +192,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
 
     fun back(): Boolean = when (current) {
         is Screen.Edit -> { saveDraft(); true }
-        is Screen.WorkoutSession -> { workouts.save(); true }
+        is Screen.WorkoutSession -> { workouts.cancel(); true }
         else -> {
             if (activeStack.size <= 1) false
             else {

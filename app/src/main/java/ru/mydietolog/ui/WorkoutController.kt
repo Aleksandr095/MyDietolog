@@ -8,10 +8,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import ru.mydietolog.data.ExerciseKind
 import ru.mydietolog.data.ProgramSession
+import ru.mydietolog.data.SessionMove
 import ru.mydietolog.data.WorkoutLog
 import ru.mydietolog.data.WorkoutProgram
 import ru.mydietolog.data.WorkoutRepository
 import ru.mydietolog.data.formatLastTime
+import ru.mydietolog.data.programOrigin
+import ru.mydietolog.data.weekStart
 import java.time.LocalDate
 
 enum class WeekDayMark { EMPTY, PLANNED, PARTIAL, DONE }
@@ -37,6 +40,7 @@ class WorkoutController(
     val program = repo.program
     val logs = repo.logs
     val customNames = repo.customNames
+    val moves = repo.moves
 
     var draft by mutableStateOf<WorkoutDraft?>(null)
         private set
@@ -50,6 +54,58 @@ class WorkoutController(
         private set
     var programError by mutableStateOf<String?>(null)
         private set
+    var programEdit by mutableStateOf<ProgramEdit?>(null)
+        private set
+
+    var selectedDate by mutableStateOf(nav.today())
+        private set
+
+    private var openedSnapshot: WorkoutLog? = null
+    private var createdFreshLog: Boolean = false
+
+    fun selectDate(date: LocalDate) {
+        selectedDate = date
+    }
+
+    fun openPlan(date: LocalDate) {
+        if (sessionOn(date) != null) nav.push(Screen.WorkoutPlan(date))
+    }
+
+    fun sessionOn(date: LocalDate): ProgramSession? {
+        val current = program.value ?: return null
+        return ru.mydietolog.data.sessionOn(current, moves.value, date)
+    }
+
+    /**
+     * Переносит занятие с [from] на [to] в пределах одной недели.
+     * Если на [to] уже есть занятие, они меняются местами. Факт едет вместе с занятием.
+     */
+    fun moveSession(from: LocalDate, to: LocalDate) {
+        if (from == to || from.weekStart() != to.weekStart()) return
+        val current = program.value ?: return
+        val session = ru.mydietolog.data.sessionOn(current, moves.value, from) ?: return
+        val other = ru.mydietolog.data.sessionOn(current, moves.value, to)
+        val week = from.weekStart()
+        val updated = moves.value.toMutableList()
+        fun place(sessionId: String, origin: LocalDate, date: LocalDate) {
+            updated.removeAll { it.sessionId == sessionId && it.origin == origin }
+            if (date != origin) updated.add(SessionMove(sessionId, origin, date))
+        }
+        place(session.id, programOrigin(session, week), to)
+        if (other != null) place(other.id, programOrigin(other, week), from)
+        scope.launch {
+            val changes = buildMap {
+                logs.value.firstOrNull { it.date == from && it.sessionId == session.id }?.let { put(it.id, to) }
+                if (other != null) {
+                    logs.value.firstOrNull { it.date == to && it.sessionId == other.id }?.let { put(it.id, from) }
+                }
+            }
+            repo.saveMoves(updated)
+            repo.redateLogs(changes)
+            selectDate(to)
+            if (nav.current is Screen.WorkoutPlan) nav.popOne()
+        }
+    }
 
     fun openProgram() {
         programPreview = null
@@ -83,26 +139,29 @@ class WorkoutController(
             val existing = repo.logsOn(date).firstOrNull { it.sessionId == session.id }
             val log = existing ?: WorkoutLog.fromProgramSession(date, session)
             if (existing == null) repo.upsertLog(log)
-            show(log)
+            show(log, createdFresh = existing == null)
         }
     }
 
-    fun startOutsidePlan(date: LocalDate = nav.today()) {
+    fun startOutsidePlan(date: LocalDate = selectedDate) {
         scope.launch {
             val log = WorkoutLog.outsidePlan(date)
             repo.upsertLog(log)
-            show(log)
+            show(log, createdFresh = true)
         }
     }
 
-    fun openExisting(log: WorkoutLog) = show(log)
+    fun openExisting(log: WorkoutLog) = show(log, createdFresh = false)
 
-    private fun show(log: WorkoutLog) {
+    private fun show(log: WorkoutLog, createdFresh: Boolean) {
+        openedSnapshot = log
+        createdFreshLog = createdFresh
         draft = WorkoutDraft.from(log, lastTimeResolver(repo::lastTimeFor, log.date))
         if (nav.current !is Screen.WorkoutSession) nav.push(Screen.WorkoutSession)
     }
 
-    fun save() {
+    /** Сохранить факт и вернуться на главный экран тренировок. */
+    fun finish() {
         val current = draft ?: run { close(); return }
         scope.launch {
             repo.upsertLog(current.toLog())
@@ -110,7 +169,49 @@ class WorkoutController(
         }
     }
 
+    /** Отменить правки экрана. Пустую новую запись удаляем. Внеплановую с упражнениями оставляем. */
+    fun cancel() {
+        val snap = openedSnapshot
+        val current = draft
+        scope.launch {
+            when {
+                snap == null -> Unit
+                createdFreshLog && snap.sessionId == null && current?.toLog()?.hasContent == true ->
+                    repo.upsertLog(current.toLog())
+                createdFreshLog && snap.sessionId == null -> repo.deleteLog(snap.id)
+                createdFreshLog && current?.toLog()?.hasProgress != true -> repo.deleteLog(snap.id)
+                else -> repo.upsertLog(snap)
+            }
+            close()
+        }
+    }
+
+    fun openProgramEditor() {
+        programEdit = program.value?.let { ProgramEdit.from(it) } ?: ProgramEdit.blank()
+        if (nav.current !is Screen.ProgramEdit) nav.push(Screen.ProgramEdit)
+    }
+
+    fun saveProgramEditor() {
+        val edit = programEdit ?: return
+        scope.launch {
+            repo.saveProgram(edit.toProgram())
+            programEdit = null
+            if (nav.current is Screen.ProgramEdit) nav.popOne()
+        }
+    }
+
+    fun setSessionWeekday(session: SessionEdit, weekday: Int) {
+        val edit = programEdit ?: return
+        val day = weekday.coerceIn(1, 7)
+        edit.sessions.firstOrNull { it !== session && it.weekday == day }?.let { other ->
+            other.weekday = session.weekday
+        }
+        session.weekday = day
+    }
+
     private fun close() {
+        openedSnapshot = null
+        createdFreshLog = false
         draft = null
         nav.popToWorkoutsHome()
     }
@@ -174,11 +275,12 @@ class WorkoutController(
 
     fun weekMark(date: LocalDate): WeekDayMark {
         val dayLogs = repo.logsOn(date)
-        val planned = program.value?.sessionFor(date) != null
+        val planned = sessionOn(date) != null
+        val active = dayLogs.filter { !it.cancelled }
         return when {
-            dayLogs.any { it.isFullyDone } -> WeekDayMark.DONE
-            dayLogs.any { it.hasProgress || it.isPartial } -> WeekDayMark.PARTIAL
-            planned -> WeekDayMark.PLANNED
+            active.any { it.isFullyDone } -> WeekDayMark.DONE
+            active.any { it.hasProgress || it.isPartial } -> WeekDayMark.PARTIAL
+            planned && dayLogs.none { it.cancelled && it.sessionId != null } -> WeekDayMark.PLANNED
             else -> WeekDayMark.EMPTY
         }
     }
