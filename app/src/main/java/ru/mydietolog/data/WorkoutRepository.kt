@@ -91,8 +91,12 @@ class WorkoutRepository(private val context: Context) {
      * @throws Exception при ошибке чтения/парсинга
      */
     suspend fun parseProgram(uri: Uri, displayName: String?): WorkoutProgram = withContext(Dispatchers.IO) {
-        val text = context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
-            ?: error("Не удалось прочитать файл")
+        val text = try {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                ?: error("Не удалось прочитать файл")
+        } catch (_: SecurityException) {
+            error("Нет доступа к файлу. Разрешите доступ к файлам и выберите его снова.")
+        }
         val json = JSONObject(text)
         WorkoutProgram.fromJson(json, fileName = displayName).copy(loadedAt = System.currentTimeMillis())
     }
