@@ -101,7 +101,7 @@ private fun ScaleRow(label: String, value: Int?, onValue: (Int?) -> Unit) {
 }
 
 @Composable
-private fun ChoiceChip(text: String, selected: Boolean, onClick: () -> Unit) {
+internal fun ChoiceChip(text: String, selected: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(12.dp)
     Box(
         Modifier

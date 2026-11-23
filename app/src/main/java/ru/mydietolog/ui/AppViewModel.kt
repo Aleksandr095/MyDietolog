@@ -10,7 +10,9 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ru.mydietolog.data.DayMarks
 import ru.mydietolog.data.DayMarksRepository
 import ru.mydietolog.data.Dish
@@ -19,8 +21,11 @@ import ru.mydietolog.data.MAX_PHOTOS_PER_DISH
 import ru.mydietolog.data.Meal
 import ru.mydietolog.data.MealType
 import ru.mydietolog.data.Repository
+import ru.mydietolog.data.ReminderSettings
+import ru.mydietolog.data.ReminderSettingsRepository
 import ru.mydietolog.data.WeekSummary
 import ru.mydietolog.data.WorkoutRepository
+import ru.mydietolog.reminders.ReminderScheduler
 import java.io.File
 import java.time.LocalDate
 import java.time.YearMonth
@@ -33,6 +38,7 @@ sealed interface Screen {
     data object Edit : Screen
     data class Month(val month: YearMonth) : Screen
     data class Export(val weekStart: LocalDate) : Screen
+    data object Settings : Screen
 
     data object WorkoutsHome : Screen
     data object WorkoutSession : Screen
@@ -105,10 +111,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
     val repo = Repository(app)
     val workoutRepo = WorkoutRepository(app)
     val marksRepo = DayMarksRepository(app)
+    val reminderRepo = ReminderSettingsRepository(app)
     private val exporter = Exporter(app, repo)
 
     val meals = repo.meals
     val marks = marksRepo.marks
+    val reminders = reminderRepo.settings
     val workouts = WorkoutController(workoutRepo, viewModelScope, this)
 
     var tab by mutableStateOf(MainTab.DIARY)
@@ -144,10 +152,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
             workoutRepo.load()
             marksRepo.load()
         }
+        viewModelScope.launch {
+            reminderRepo.load()
+            withContext(Dispatchers.IO) { ReminderScheduler.rescheduleAll(app) }
+        }
     }
 
     fun updateMarks(date: LocalDate, change: (DayMarks) -> DayMarks) {
         viewModelScope.launch { marksRepo.update(date, change) }
+    }
+
+    fun updateReminders(change: (ReminderSettings) -> ReminderSettings) {
+        viewModelScope.launch {
+            reminderRepo.update(change)
+            withContext(Dispatchers.IO) { ReminderScheduler.rescheduleAll(getApplication()) }
+        }
     }
 
     override fun today(): LocalDate = LocalDate.now()

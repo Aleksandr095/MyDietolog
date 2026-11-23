@@ -70,6 +70,7 @@ fun DayScreen(vm: AppViewModel) {
             RoundIcon(AppIcons.left, "Предыдущая неделя", { vm.selectedDate = date.minusWeeks(1) })
             RoundIcon(AppIcons.right, "Следующая неделя", { vm.selectedDate = date.plusWeeks(1) })
             RoundIcon(AppIcons.calendar, "Календарь месяца", { vm.push(Screen.Month(YearMonth.from(date))) }, outlined = true)
+            RoundIcon(AppIcons.settings, "Настройки", { vm.push(Screen.Settings) }, outlined = true)
         }
 
         // Неделя
