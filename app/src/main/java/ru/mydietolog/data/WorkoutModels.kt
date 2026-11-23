@@ -1,0 +1,269 @@
+package ru.mydietolog.data
+
+import org.json.JSONArray
+import org.json.JSONObject
+import java.time.LocalDate
+import java.util.UUID
+
+enum class ExerciseKind(val code: String) {
+    STRENGTH("strength"),
+    CARDIO("cardio");
+
+    companion object {
+        fun fromCode(code: String): ExerciseKind =
+            entries.firstOrNull { it.code.equals(code, ignoreCase = true) } ?: STRENGTH
+    }
+}
+
+/** Упражнение в файле программы. */
+data class ProgramExercise(
+    val id: String,
+    val name: String,
+    val target: String = "",
+    val note: String = "",
+    val techniqueUrl: String? = null,
+    val kind: ExerciseKind = ExerciseKind.STRENGTH,
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("name", name)
+        put("target", target)
+        put("note", note)
+        put("technique_url", techniqueUrl ?: JSONObject.NULL)
+        put("kind", kind.code)
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject): ProgramExercise = ProgramExercise(
+            id = o.optString("id").ifBlank { UUID.randomUUID().toString() },
+            name = o.optString("name", ""),
+            target = o.optString("target", ""),
+            note = o.optString("note", ""),
+            techniqueUrl = o.optStringOrNull("technique_url"),
+            kind = ExerciseKind.fromCode(o.optString("kind", "strength")),
+        )
+    }
+}
+
+/** Тип занятия в программе (привязан к дню недели 1=Пн … 7=Вс). */
+data class ProgramSession(
+    val id: String,
+    val name: String,
+    val weekday: Int,
+    val exercises: List<ProgramExercise> = emptyList(),
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("name", name)
+        put("weekday", weekday)
+        put("exercises", JSONArray(exercises.map { it.toJson() }))
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject): ProgramSession = ProgramSession(
+            id = o.optString("id").ifBlank { UUID.randomUUID().toString() },
+            name = o.optString("name", ""),
+            weekday = o.optInt("weekday", 1).coerceIn(1, 7),
+            exercises = o.optJSONArray("exercises")?.mapObjects { ProgramExercise.fromJson(it) }.orEmpty(),
+        )
+    }
+}
+
+data class WorkoutProgram(
+    val id: String,
+    val title: String,
+    val fileName: String? = null,
+    val loadedAt: Long = System.currentTimeMillis(),
+    val sessions: List<ProgramSession> = emptyList(),
+) {
+    fun sessionFor(date: LocalDate): ProgramSession? =
+        sessions.firstOrNull { it.weekday == date.dayOfWeek.value }
+
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("title", title)
+        put("file_name", fileName ?: JSONObject.NULL)
+        put("loaded_at", loadedAt)
+        put("sessions", JSONArray(sessions.map { it.toJson() }))
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject, fileName: String? = null): WorkoutProgram = WorkoutProgram(
+            id = o.optString("id").ifBlank { UUID.randomUUID().toString() },
+            title = o.optString("title", "Программа"),
+            fileName = fileName ?: o.optStringOrNull("file_name"),
+            loadedAt = o.optLong("loaded_at", System.currentTimeMillis()),
+            sessions = o.optJSONArray("sessions")?.mapObjects { ProgramSession.fromJson(it) }.orEmpty(),
+        )
+    }
+}
+
+data class SetLog(
+    val weightKg: Float? = null,
+    val reps: Int? = null,
+    val done: Boolean = false,
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("weight_kg", weightKg ?: JSONObject.NULL)
+        put("reps", reps ?: JSONObject.NULL)
+        put("done", done)
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject): SetLog = SetLog(
+            weightKg = o.optFloatOrNull("weight_kg"),
+            reps = o.optIntOrNull("reps"),
+            done = o.optBoolean("done", false),
+        )
+    }
+}
+
+data class ExerciseLog(
+    val id: String = UUID.randomUUID().toString(),
+    /** Id из программы; null у своих. */
+    val exerciseId: String? = null,
+    val name: String,
+    val target: String = "",
+    val note: String = "",
+    val techniqueUrl: String? = null,
+    val kind: ExerciseKind = ExerciseKind.STRENGTH,
+    val isCustom: Boolean = false,
+    val done: Boolean = false,
+    val sets: List<SetLog> = emptyList(),
+    val minutes: Int? = null,
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("exercise_id", exerciseId ?: JSONObject.NULL)
+        put("name", name)
+        put("target", target)
+        put("note", note)
+        put("technique_url", techniqueUrl ?: JSONObject.NULL)
+        put("kind", kind.code)
+        put("is_custom", isCustom)
+        put("done", done)
+        put("sets", JSONArray(sets.map { it.toJson() }))
+        put("minutes", minutes ?: JSONObject.NULL)
+    }
+
+    companion object {
+        fun fromProgram(ex: ProgramExercise): ExerciseLog {
+            val sets = if (ex.kind == ExerciseKind.CARDIO) emptyList()
+            else List(parseSetCount(ex.target)) { SetLog() }
+            return ExerciseLog(
+                exerciseId = ex.id,
+                name = ex.name,
+                target = ex.target,
+                note = ex.note,
+                techniqueUrl = ex.techniqueUrl,
+                kind = ex.kind,
+                isCustom = false,
+                sets = sets,
+            )
+        }
+
+        fun fromJson(o: JSONObject): ExerciseLog = ExerciseLog(
+            id = o.optString("id", UUID.randomUUID().toString()),
+            exerciseId = o.optStringOrNull("exercise_id"),
+            name = o.optString("name", ""),
+            target = o.optString("target", ""),
+            note = o.optString("note", ""),
+            techniqueUrl = o.optStringOrNull("technique_url"),
+            kind = ExerciseKind.fromCode(o.optString("kind", "strength")),
+            isCustom = o.optBoolean("is_custom", false),
+            done = o.optBoolean("done", false),
+            sets = o.optJSONArray("sets")?.mapObjects { SetLog.fromJson(it) }.orEmpty(),
+            minutes = o.optIntOrNull("minutes"),
+        )
+    }
+}
+
+data class WorkoutLog(
+    val id: String = UUID.randomUUID().toString(),
+    val date: LocalDate,
+    val sessionId: String? = null,
+    val sessionName: String,
+    val exercises: List<ExerciseLog> = emptyList(),
+    val createdAt: Long = System.currentTimeMillis(),
+) {
+    val doneCount: Int get() = exercises.count { it.done }
+    val isFullyDone: Boolean get() = exercises.isNotEmpty() && exercises.all { it.done }
+    val isPartial: Boolean get() = doneCount > 0 && !isFullyDone
+    val hasProgress: Boolean get() = exercises.any { it.done || it.sets.any { s -> s.done } || (it.minutes ?: 0) > 0 }
+
+    fun markLabel(): String = when {
+        isFullyDone -> "сделано"
+        isPartial || hasProgress -> "частично"
+        else -> "есть запись"
+    }
+
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("date", date.toString())
+        put("session_id", sessionId ?: JSONObject.NULL)
+        put("session_name", sessionName)
+        put("created_at", createdAt)
+        put("exercises", JSONArray(exercises.map { it.toJson() }))
+    }
+
+    companion object {
+        fun fromProgramSession(date: LocalDate, session: ProgramSession): WorkoutLog =
+            WorkoutLog(
+                date = date,
+                sessionId = session.id,
+                sessionName = session.name,
+                exercises = session.exercises.map { ExerciseLog.fromProgram(it) },
+            )
+
+        fun outsidePlan(date: LocalDate): WorkoutLog =
+            WorkoutLog(date = date, sessionId = null, sessionName = "Вне плана")
+
+        fun fromJson(o: JSONObject): WorkoutLog = WorkoutLog(
+            id = o.optString("id", UUID.randomUUID().toString()),
+            date = LocalDate.parse(o.getString("date")),
+            sessionId = o.optStringOrNull("session_id"),
+            sessionName = o.optString("session_name", "Тренировка"),
+            createdAt = o.optLong("created_at", 0L),
+            exercises = o.optJSONArray("exercises")?.mapObjects { ExerciseLog.fromJson(it) }.orEmpty(),
+        )
+    }
+}
+
+/** Краткое описание прошлого выполнения для подсказки «в прошлый раз». */
+fun formatLastTime(log: ExerciseLog?): String {
+    if (log == null) return "первый раз"
+    return when (log.kind) {
+        ExerciseKind.CARDIO -> log.minutes?.let { "$it мин" } ?: "первый раз"
+        ExerciseKind.STRENGTH -> {
+            val doneSets = log.sets.filter { it.done || it.reps != null }
+            if (doneSets.isEmpty()) return "первый раз"
+            val weight = doneSets.mapNotNull { it.weightKg }.lastOrNull()
+            val reps = doneSets.mapNotNull { it.reps }.joinToString(", ")
+            buildList {
+                weight?.let { add("${formatWeight(it)} кг") }
+                if (reps.isNotBlank()) add(reps)
+            }.joinToString(" · ").ifBlank { "первый раз" }
+        }
+    }
+}
+
+fun formatWeight(w: Float): String =
+    if (w == w.toLong().toFloat()) w.toLong().toString() else w.toString()
+
+fun normalizeExerciseName(name: String): String =
+    name.trim().lowercase().replace(Regex("\\s+"), " ")
+
+/** Из цели вида «3 × 10–12» берём число подходов. */
+fun parseSetCount(target: String): Int {
+    val m = Regex("""(\d+)\s*[×xX*]""").find(target)
+    return m?.groupValues?.get(1)?.toIntOrNull()?.coerceIn(1, 12) ?: 3
+}
+
+internal fun JSONObject.optStringOrNull(key: String): String? =
+    if (!has(key) || isNull(key)) null else optString(key).ifBlank { null }
+
+internal fun JSONObject.optFloatOrNull(key: String): Float? =
+    if (!has(key) || isNull(key)) null else optDouble(key).toFloat()
+
+internal inline fun <T> JSONArray.mapObjects(crossinline block: (JSONObject) -> T): List<T> =
+    (0 until length()).map { block(getJSONObject(it)) }

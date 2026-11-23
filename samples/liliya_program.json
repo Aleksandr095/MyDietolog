@@ -1,0 +1,155 @@
+{
+  "id": "liliya-strength-walk-v1",
+  "title": "Лили · сила 3× + ходьба",
+  "sessions": [
+    {
+      "id": "strength-a",
+      "name": "Сила A",
+      "weekday": 1,
+      "exercises": [
+        {
+          "id": "squat-db",
+          "name": "Приседания с гантелями",
+          "target": "3 × 10–12",
+          "note": "Глубина до параллели, колени наружу",
+          "technique_url": "https://www.youtube.com/results?search_query=dumbbell+squat+technique",
+          "kind": "strength"
+        },
+        {
+          "id": "romanian-dl",
+          "name": "Румынская тяга с гантелями",
+          "target": "3 × 10–12",
+          "note": "Мягкие колени, спина ровная",
+          "kind": "strength"
+        },
+        {
+          "id": "bench-db",
+          "name": "Жим гантелей лёжа",
+          "target": "3 × 8–10",
+          "note": "Лопатки сведены",
+          "kind": "strength"
+        },
+        {
+          "id": "row-db",
+          "name": "Тяга гантелей в наклоне",
+          "target": "3 × 10–12",
+          "note": "Локти вдоль корпуса",
+          "kind": "strength"
+        },
+        {
+          "id": "plank",
+          "name": "Планка",
+          "target": "3 × 40 сек",
+          "note": "Корпус прямой",
+          "kind": "strength"
+        }
+      ]
+    },
+    {
+      "id": "walk-tue",
+      "name": "Ходьба 40′",
+      "weekday": 2,
+      "exercises": [
+        {
+          "id": "walk",
+          "name": "Ходьба",
+          "target": "40 мин",
+          "note": "Темп разговорный",
+          "kind": "cardio"
+        }
+      ]
+    },
+    {
+      "id": "strength-b",
+      "name": "Сила B",
+      "weekday": 3,
+      "exercises": [
+        {
+          "id": "split-squat",
+          "name": "Болгарские выпады",
+          "target": "3 × 8–10",
+          "note": "Опора сзади на скамью/стул",
+          "kind": "strength"
+        },
+        {
+          "id": "hip-thrust",
+          "name": "Ягодичный мост",
+          "target": "3 × 12–15",
+          "note": "Пауза сверху",
+          "kind": "strength"
+        },
+        {
+          "id": "ohp-db",
+          "name": "Жим гантелей стоя",
+          "target": "3 × 8–10",
+          "kind": "strength"
+        },
+        {
+          "id": "lat-pulldown-alt",
+          "name": "Тяга верхнего блока / подтягивания",
+          "target": "3 × 8–12",
+          "note": "Если нет блока — австралийские подтягивания",
+          "kind": "strength"
+        },
+        {
+          "id": "side-plank",
+          "name": "Боковая планка",
+          "target": "3 × 30 сек",
+          "kind": "strength"
+        }
+      ]
+    },
+    {
+      "id": "walk-thu",
+      "name": "Ходьба 40′",
+      "weekday": 4,
+      "exercises": [
+        {
+          "id": "walk",
+          "name": "Ходьба",
+          "target": "40 мин",
+          "note": "Темп разговорный",
+          "kind": "cardio"
+        }
+      ]
+    },
+    {
+      "id": "strength-a-fri",
+      "name": "Сила A",
+      "weekday": 5,
+      "exercises": [
+        {
+          "id": "squat-db",
+          "name": "Приседания с гантелями",
+          "target": "3 × 10–12",
+          "note": "Глубина до параллели, колени наружу",
+          "kind": "strength"
+        },
+        {
+          "id": "romanian-dl",
+          "name": "Румынская тяга с гантелями",
+          "target": "3 × 10–12",
+          "kind": "strength"
+        },
+        {
+          "id": "bench-db",
+          "name": "Жим гантелей лёжа",
+          "target": "3 × 8–10",
+          "kind": "strength"
+        },
+        {
+          "id": "row-db",
+          "name": "Тяга гантелей в наклоне",
+          "target": "3 × 10–12",
+          "kind": "strength"
+        },
+        {
+          "id": "plank",
+          "name": "Планка",
+          "target": "3 × 40 сек",
+          "kind": "strength"
+        }
+      ]
+    }
+  ]
+}
