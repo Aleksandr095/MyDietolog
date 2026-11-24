@@ -54,12 +54,12 @@ class DishDraft(
     description: String = "",
     weight: String = "",
     kcal: String = "",
-    photos: List<String> = emptyList(),
+    photoNames: List<String> = emptyList(),
 ) {
     var description by mutableStateOf(description)
     var weight by mutableStateOf(weight)
     var kcal by mutableStateOf(kcal)
-    val photos: SnapshotStateList<String> = mutableStateListOf<String>().apply { addAll(photos) }
+    val photos: SnapshotStateList<String> = mutableStateListOf<String>().apply { addAll(photoNames) }
     var importing by mutableStateOf(false)
 
     val canAddPhoto: Boolean get() = photos.size < MAX_PHOTOS_PER_DISH

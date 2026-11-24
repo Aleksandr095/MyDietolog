@@ -15,14 +15,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -149,8 +153,14 @@ fun DayScreen(vm: AppViewModel) {
         }
 
         val circleOrder = listOf(MealType.BREAKFAST, MealType.LUNCH, MealType.SNACK, MealType.DINNER)
-        val extras = dayMeals.filter { meal ->
-            dayMeals.firstOrNull { it.type == meal.type }?.id != meal.id
+        var pickMeals by remember { mutableStateOf<List<Meal>?>(null) }
+        fun openType(type: MealType) {
+            val ofType = dayMeals.filter { it.type == type }
+            when {
+                ofType.isEmpty() -> vm.openNewMeal(type)
+                ofType.size == 1 -> vm.openMeal(ofType.first())
+                else -> pickMeals = ofType
+            }
         }
         LazyColumn(
             modifier = Modifier.weight(1f),
@@ -161,12 +171,9 @@ fun DayScreen(vm: AppViewModel) {
                 MealCircleRow(
                     meals = dayMeals,
                     order = circleOrder,
-                    onOpen = { vm.openMeal(it) },
-                    onAdd = { vm.openNewMeal(it) },
+                    onOpen = { openType(it) },
+                    onAdd = { openType(it) },
                 )
-            }
-            items(extras, key = { it.id }) { meal ->
-                MealCard(vm, meal) { vm.openMeal(meal) }
             }
             item(key = "day_marks_$date") {
                 DayMarksCard(dayMarks) { change -> vm.updateMarks(date, change) }
@@ -178,7 +185,31 @@ fun DayScreen(vm: AppViewModel) {
                 "Выгрузить неделю",
                 onClick = { vm.push(Screen.Export(weekStart)) },
                 icon = AppIcons.download,
-                dark = true,
+            )
+        }
+        pickMeals?.let { meals ->
+            AlertDialog(
+                onDismissRequest = { pickMeals = null },
+                title = { Text(meals.first().type.title) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        meals.forEach { meal ->
+                            val text = meal.dishes.map { it.description }.filter { it.isNotBlank() }.joinToString("; ")
+                            TextButton(onClick = {
+                                pickMeals = null
+                                vm.openMeal(meal)
+                            }) {
+                                Text(
+                                    text.ifBlank { "Без описания" } + if (meal.photoCount > 0) " · ${Ru.photos(meal.photoCount)}" else "",
+                                    color = Palette.ink,
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { pickMeals = null }) { Text("Закрыть") }
+                },
             )
         }
     }
@@ -188,7 +219,7 @@ fun DayScreen(vm: AppViewModel) {
 private fun MealCircleRow(
     meals: List<Meal>,
     order: List<MealType>,
-    onOpen: (Meal) -> Unit,
+    onOpen: (MealType) -> Unit,
     onAdd: (MealType) -> Unit,
 ) {
     val shape = RoundedCornerShape(22.dp)
@@ -206,7 +237,7 @@ private fun MealCircleRow(
             MealCircle(
                 type = type,
                 meals = ofType,
-                onOpen = onOpen,
+                onOpen = { onOpen(type) },
                 onAdd = { onAdd(type) },
                 modifier = Modifier.weight(1f),
             )
@@ -251,7 +282,7 @@ private fun MealCircle(
                     .align(Alignment.BottomEnd)
                     .size(22.dp)
                     .clip(CircleShape)
-                    .background(Palette.ink)
+                    .background(Color(0xFF1A1D1B))
                     .clickable(onClick = onAdd),
                 contentAlignment = Alignment.Center,
             ) {
@@ -274,52 +305,6 @@ private fun MealCircle(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-    }
-}
-
-@Composable
-private fun MealCard(vm: AppViewModel, meal: Meal, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(20.dp)
-    val firstPhoto = meal.dishes.flatMap { it.photos }.firstOrNull()
-    val text = meal.dishes.map { it.description }.filter { it.isNotBlank() }.joinToString("; ")
-    val meta = buildList {
-        if (meal.photoCount > 0) add(Ru.photos(meal.photoCount))
-        val w = meal.dishes.mapNotNull { it.weightG }
-        if (w.isNotEmpty()) add("${w.sum()} г")
-        meal.totalKcal?.let { add("моя оценка $it ккал") }
-    }.joinToString(" · ")
-
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(Palette.surface)
-            .border(1.dp, Palette.line, shape)
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        PhotoThumb(
-            file = firstPhoto?.let { vm.photoFile(it) },
-            modifier = Modifier.size(76.dp),
-            radius = 14.dp,
-            description = meal.type.title,
-        )
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(meal.type.title, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Palette.ink, modifier = Modifier.weight(1f))
-                meal.time?.let { Text(it, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted) }
-            }
-            Text(
-                text.ifBlank { "Без описания" },
-                fontSize = 14.sp,
-                lineHeight = 19.sp,
-                color = if (text.isBlank()) Palette.muted else Palette.inkSoft,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (meta.isNotBlank()) Text(meta, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted)
-        }
     }
 }
 
