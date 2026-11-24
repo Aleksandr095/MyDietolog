@@ -70,7 +70,7 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
             }
             RoundIcon(AppIcons.left, "Предыдущая неделя", { vm.workouts.selectDate(selected.minusWeeks(1)) })
             RoundIcon(AppIcons.right, "Следующая неделя", { vm.workouts.selectDate(selected.plusWeeks(1)) })
-            RoundIcon(AppIcons.calendar, "Календарь месяца", { vm.push(Screen.Month(YearMonth.from(selected))) }, outlined = true)
+            RoundIcon(AppIcons.calendar, "Календарь тренировок", { vm.push(Screen.WorkoutMonth(YearMonth.from(selected))) }, outlined = true)
             RoundIcon(AppIcons.settings, "Настройки", { vm.push(Screen.Settings) }, outlined = true)
         }
 

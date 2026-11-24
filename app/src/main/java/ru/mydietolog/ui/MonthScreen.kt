@@ -41,8 +41,7 @@ fun MonthScreen(vm: AppViewModel, initial: YearMonth) {
     val all by vm.meals.collectAsState()
     var month by remember { mutableStateOf(initial) }
     val today = vm.today()
-    val focus = if (vm.tab == MainTab.WORKOUTS) vm.workouts.selectedDate else vm.selectedDate
-    val selWeek = focus.weekStart()
+    val selWeek = vm.selectedDate.weekStart()
 
     val first = month.atDay(1)
     val gridStart = first.weekStart()
@@ -94,14 +93,7 @@ fun MonthScreen(vm: AppViewModel, initial: YearMonth) {
                                 isToday = d == today,
                                 future = d.isAfter(today),
                                 modifier = Modifier.weight(1f),
-                            ) {
-                                if (vm.tab == MainTab.WORKOUTS) {
-                                    vm.workouts.selectDate(d)
-                                    vm.back()
-                                } else {
-                                    vm.openDay(d)
-                                }
-                            }
+                            ) { vm.openDay(d) }
                         }
                     }
                 }

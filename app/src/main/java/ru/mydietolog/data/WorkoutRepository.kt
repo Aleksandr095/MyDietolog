@@ -101,6 +101,11 @@ class WorkoutRepository(private val context: Context) {
         persistLogs(updated)
     }
 
+    suspend fun clearLogs() {
+        _logs.value = emptyList()
+        persistLogs(emptyList())
+    }
+
     /**
      * Читает JSON программы из Uri. Не сохраняет — только парсит для превью.
      * @throws Exception при ошибке чтения/парсинга
@@ -128,6 +133,16 @@ class WorkoutRepository(private val context: Context) {
         withContext(Dispatchers.IO) {
             programFile.writeAtomic(stored.toJson().toString())
             persistMoves(validMoves)
+        }
+    }
+
+    /** Удаляет программу с телефона. Факты тренировок остаются. Переносы сбрасываются. */
+    suspend fun deleteProgram() {
+        _program.value = null
+        _moves.value = emptyList()
+        withContext(Dispatchers.IO) {
+            if (programFile.exists()) programFile.delete()
+            persistMoves(emptyList())
         }
     }
 

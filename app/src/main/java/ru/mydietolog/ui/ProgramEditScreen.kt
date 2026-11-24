@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -23,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
@@ -153,6 +156,7 @@ class ProgramEdit(
 @Composable
 fun ProgramEditScreen(vm: AppViewModel) {
     val edit = vm.workouts.programEdit
+    var confirmDeleteProgram by remember { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxSize()
@@ -189,8 +193,30 @@ fun ProgramEditScreen(vm: AppViewModel) {
             }
             SecondaryButton("Добавить занятие", onClick = { edit.sessions.add(SessionEdit()) })
         }
-        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 20.dp)) {
+        Column(
+            Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             PrimaryButton("Сохранить план", onClick = { vm.workouts.saveProgramEditor() }, icon = AppIcons.check)
+            TextButton(onClick = { confirmDeleteProgram = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("Удалить программу", fontWeight = FontWeight.Bold, color = Palette.danger)
+            }
+        }
+        if (confirmDeleteProgram) {
+            AlertDialog(
+                onDismissRequest = { confirmDeleteProgram = false },
+                title = { Text("Удалить программу?") },
+                text = { Text("Занятия пропадут из календаря. Записанные тренировки останутся в истории.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        confirmDeleteProgram = false
+                        vm.workouts.deleteProgram()
+                    }) { Text("Удалить", color = Palette.danger) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmDeleteProgram = false }) { Text("Отмена") }
+                },
+            )
         }
     }
 }
@@ -257,21 +283,24 @@ private fun ExerciseEditor(exercise: ExerciseEdit, onDelete: () -> Unit) {
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = exercise.name,
-                onValueChange = { exercise.name = it },
-                label = { Text("Упражнение") },
-                singleLine = true,
-                textStyle = TextStyle(fontSize = 15.sp),
-                shape = RoundedCornerShape(12.dp),
-                colors = appFieldColors(Palette.surface),
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = onDelete, modifier = Modifier.semantics { contentDescription = "Удалить упражнение" }) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopEnd) {
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.semantics { contentDescription = "Удалить упражнение" },
+            ) {
                 Icon(AppIcons.delete, contentDescription = null, tint = Palette.muted)
             }
         }
+        OutlinedTextField(
+            value = exercise.name,
+            onValueChange = { exercise.name = it.take(100) },
+            label = { Text("Упражнение") },
+            singleLine = true,
+            textStyle = TextStyle(fontSize = 15.sp),
+            shape = RoundedCornerShape(12.dp),
+            colors = appFieldColors(Palette.surface),
+            modifier = Modifier.fillMaxWidth(),
+        )
         if (exercise.kind == ExerciseKind.CARDIO) {
             GoalInput("Минуты", exercise.minutes, KeyboardType.Number) {
                 exercise.minutes = it.filter(Char::isDigit).take(3)
@@ -291,9 +320,10 @@ private fun ExerciseEditor(exercise: ExerciseEdit, onDelete: () -> Unit) {
         }
         OutlinedTextField(
             value = exercise.note,
-            onValueChange = { exercise.note = it },
+            onValueChange = { exercise.note = it.take(500) },
             label = { Text("Заметка") },
-            singleLine = true,
+            minLines = 3,
+            maxLines = 8,
             shape = RoundedCornerShape(12.dp),
             colors = appFieldColors(Palette.surface),
             modifier = Modifier.fillMaxWidth(),
