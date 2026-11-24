@@ -33,7 +33,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ru.mydietolog.data.ExerciseKind
 import ru.mydietolog.data.ProgramSession
 import ru.mydietolog.data.Ru
 import ru.mydietolog.data.WorkoutLog
@@ -56,12 +55,6 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
     val selectedSession = program?.let { sessionOn(it, moves, selected) }
     val dayLogs = logs.filter { it.date == selected }
     val logForSession = selectedSession?.let { s -> dayLogs.firstOrNull { it.sessionId == s.id } }
-
-    val upcoming = (0..6).map { weekStart.plusDays(it.toLong()) }
-        .filter { it.isAfter(selected) }
-        .mapNotNull { d -> program?.let { p -> sessionOn(p, moves, d)?.let { d to it } } }
-
-    val pastStart = weekStart.minusWeeks(1)
 
     Column(Modifier.fillMaxSize().background(Palette.bg)) {
         Row(
@@ -135,44 +128,8 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
                 }
             }
 
-            if (upcoming.isNotEmpty()) {
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Дальше на этой неделе", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Palette.muted)
-                        upcoming.forEach { (date, session) ->
-                            ScheduleRow(
-                                whenText = Ru.weekdayDayMonth(date),
-                                name = session.name,
-                                trailing = kindLabel(session),
-                                onClick = { vm.workouts.selectDate(date) },
-                            )
-                        }
-                    }
-                }
-            }
-
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Прошлая неделя", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Palette.muted)
-                    val pastLogs = logs.filter { it.date in pastStart..pastStart.plusDays(6) }
-                        .sortedBy { it.date }
-                    if (pastLogs.isEmpty()) {
-                        Text(
-                            "Нет отметок за ${Ru.weekRange(pastStart)}",
-                            fontSize = 14.sp,
-                            color = Palette.muted,
-                        )
-                    } else {
-                        pastLogs.forEach { log ->
-                            ScheduleRow(
-                                whenText = Ru.weekdayDayMonth(log.date),
-                                name = log.sessionName,
-                                trailing = log.markLabel(),
-                                onClick = { vm.workouts.openExisting(log) },
-                            )
-                        }
-                    }
-                }
+                SecondaryButton("История", onClick = { vm.push(Screen.WorkoutHistory) })
             }
 
             item {
@@ -279,21 +236,6 @@ private fun SelectedDayCard(
                     fontWeight = FontWeight.SemiBold,
                     color = Palette.muted,
                 )
-                session.exercises.take(3).forEach { ex ->
-                    Text(
-                        "· ${ex.name}" + if (ex.target.isNotBlank()) " — ${ex.target}" else "",
-                        fontSize = 13.sp,
-                        color = Palette.inkSoft,
-                    )
-                }
-                if (session.exercises.size > 3) {
-                    Text(
-                        "ещё ${session.exercises.size - 3} ${Ru.plural(session.exercises.size - 3, "упражнение", "упражнения", "упражнений")}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Palette.muted,
-                    )
-                }
                 if (movedFrom != null) {
                     Text(
                         "Перенесено с ${Ru.weekdayDayMonth(movedFrom)}. В программе день не меняется.",
@@ -323,6 +265,7 @@ private fun WorkoutWeekStrip(vm: AppViewModel, weekStart: LocalDate, today: Loca
             val d = weekStart.plusDays(i.toLong())
             val sel = d == selected
             val isToday = d == today
+            val hasSession = vm.workouts.sessionOn(d) != null
             val mark = vm.workouts.weekMark(d)
             val shape = RoundedCornerShape(14.dp)
             Column(
@@ -330,12 +273,19 @@ private fun WorkoutWeekStrip(vm: AppViewModel, weekStart: LocalDate, today: Loca
                     .weight(1f)
                     .height(72.dp)
                     .clip(shape)
-                    .background(if (sel) Palette.accent else Palette.surface)
+                    .background(
+                        when {
+                            sel -> Palette.accent
+                            hasSession -> Palette.weekHighlight
+                            else -> Palette.surface
+                        },
+                    )
                     .border(
                         width = if (isToday && !sel) 2.dp else 1.dp,
                         color = when {
                             sel -> Palette.accent
                             isToday -> Palette.accent
+                            hasSession -> Palette.accentDark
                             else -> Palette.line
                         },
                         shape = shape,
@@ -462,7 +412,3 @@ internal fun MoveWorkoutDialog(
     )
 }
 
-private fun kindLabel(session: ProgramSession): String {
-    val allCardio = session.exercises.isNotEmpty() && session.exercises.all { it.kind == ExerciseKind.CARDIO }
-    return if (allCardio) "кардио" else "сила"
-}

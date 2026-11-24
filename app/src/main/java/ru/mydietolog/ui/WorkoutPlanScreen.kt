@@ -1,7 +1,10 @@
 package ru.mydietolog.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -21,10 +24,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ru.mydietolog.data.ExerciseKind
 import ru.mydietolog.data.ProgramExercise
 import ru.mydietolog.data.Ru
 import ru.mydietolog.data.movedFrom
@@ -116,18 +119,21 @@ private fun PlanExerciseRow(index: Int, ex: ProgramExercise) {
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        val context = LocalContext.current
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("$index.", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Palette.muted)
-            Text(ex.name, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Palette.ink, modifier = Modifier.weight(1f))
-        }
-        if (ex.target.isNotBlank()) {
-            Text("Цель: ${ex.target}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted)
-        }
-        if (ex.note.isNotBlank()) {
-            Text(ex.note, fontSize = 13.sp, color = Palette.inkSoft)
-        }
-        if (ex.kind == ExerciseKind.CARDIO) {
-            Text("Кардио · минуты", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted)
+            Text(
+                ex.name,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = if (ex.techniqueUrl.isNullOrBlank()) Palette.ink else Palette.accent,
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(enabled = !ex.techniqueUrl.isNullOrBlank()) {
+                        val url = ex.techniqueUrl ?: return@clickable
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                    },
+            )
         }
     }
 }

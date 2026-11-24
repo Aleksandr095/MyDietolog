@@ -154,9 +154,14 @@ class WorkoutController(
     fun openExisting(log: WorkoutLog) = show(log, createdFresh = false)
 
     private fun show(log: WorkoutLog, createdFresh: Boolean) {
-        openedSnapshot = log
+        val next = WorkoutDraft.from(log, lastTimeResolver(repo::lastTimeFor, log.date))
+        val filled = next.toLog()
+        openedSnapshot = filled
         createdFreshLog = createdFresh
-        draft = WorkoutDraft.from(log, lastTimeResolver(repo::lastTimeFor, log.date))
+        draft = next
+        if (filled.exercises != log.exercises) {
+            scope.launch { repo.upsertLog(filled) }
+        }
         if (nav.current !is Screen.WorkoutSession) nav.push(Screen.WorkoutSession)
     }
 
@@ -235,7 +240,9 @@ class WorkoutController(
         current.exercises.add(
             ExerciseDraft(
                 name = name,
-                target = "$setCount × ${reps.ifBlank { "—" }}",
+                goalSets = setCount,
+                goalReps = reps,
+                goalWeight = customWeight.trim(),
                 kind = ExerciseKind.STRENGTH,
                 isCustom = true,
                 sets = List(setCount) { SetDraft(weight = customWeight.replace(',', '.'), reps = reps) },
@@ -255,17 +262,13 @@ class WorkoutController(
     }
 
     fun toggleDone(ex: ExerciseDraft) {
-        ex.done = !ex.done
-        if (ex.done) markFilledSets(ex)
+        setExerciseDone(ex, !ex.done)
         persistQuiet()
     }
 
-    fun markPlannedDone() {
-        draft?.exercises?.filterNot { it.isCustom }?.forEach { ex ->
-            ex.done = true
-            markFilledSets(ex)
-        }
-        persistQuiet()
+    /** Все упражнения и подходы отмечены, статус станет «завершено». На диск не пишется. */
+    fun completeDraft() {
+        draft?.exercises?.forEach { setExerciseDone(it, true) }
     }
 
     fun persistQuiet() {
@@ -285,10 +288,8 @@ class WorkoutController(
         }
     }
 
-    private fun markFilledSets(ex: ExerciseDraft) {
-        if (ex.kind != ExerciseKind.STRENGTH) return
-        ex.sets.forEach { set ->
-            if (set.reps.isNotBlank() || set.weight.isNotBlank()) set.done = true
-        }
+    private fun setExerciseDone(ex: ExerciseDraft, done: Boolean) {
+        ex.done = done
+        ex.sets.forEach { it.done = done }
     }
 }

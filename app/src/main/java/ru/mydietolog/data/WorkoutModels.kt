@@ -19,7 +19,10 @@ enum class ExerciseKind(val code: String) {
 data class ProgramExercise(
     val id: String,
     val name: String,
-    val target: String = "",
+    val goalSets: Int? = null,
+    val goalReps: String = "",
+    val goalWeight: String = "",
+    val goalMinutes: Int? = null,
     val note: String = "",
     val techniqueUrl: String? = null,
     val kind: ExerciseKind = ExerciseKind.STRENGTH,
@@ -27,21 +30,30 @@ data class ProgramExercise(
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id)
         put("name", name)
-        put("target", target)
+        put("sets", goalSets ?: JSONObject.NULL)
+        put("reps", goalReps)
+        put("weight_kg", goalWeight)
+        put("minutes", goalMinutes ?: JSONObject.NULL)
         put("note", note)
         put("technique_url", techniqueUrl ?: JSONObject.NULL)
         put("kind", kind.code)
     }
 
     companion object {
-        fun fromJson(o: JSONObject): ProgramExercise = ProgramExercise(
-            id = o.optString("id").ifBlank { UUID.randomUUID().toString() },
-            name = o.optString("name", ""),
-            target = o.optString("target", ""),
-            note = o.optString("note", ""),
-            techniqueUrl = o.optStringOrNull("technique_url"),
-            kind = ExerciseKind.fromCode(o.optString("kind", "strength")),
-        )
+        fun fromJson(o: JSONObject): ProgramExercise {
+            val legacy = parseLegacyTarget(o.optString("target", ""))
+            return ProgramExercise(
+                id = o.optString("id").ifBlank { UUID.randomUUID().toString() },
+                name = o.optString("name", ""),
+                goalSets = o.optIntOrNull("sets") ?: legacy.sets,
+                goalReps = o.optString("reps", "").ifBlank { legacy.reps },
+                goalWeight = o.optString("weight_kg", "").ifBlank { legacy.weight },
+                goalMinutes = o.optIntOrNull("minutes") ?: legacy.minutes,
+                note = o.optString("note", ""),
+                techniqueUrl = o.optStringOrNull("technique_url"),
+                kind = ExerciseKind.fromCode(o.optString("kind", "strength")),
+            )
+        }
     }
 }
 
@@ -165,7 +177,10 @@ data class ExerciseLog(
     /** Id из программы; null у своих. */
     val exerciseId: String? = null,
     val name: String,
-    val target: String = "",
+    val goalSets: Int? = null,
+    val goalReps: String = "",
+    val goalWeight: String = "",
+    val goalMinutes: Int? = null,
     val note: String = "",
     val techniqueUrl: String? = null,
     val kind: ExerciseKind = ExerciseKind.STRENGTH,
@@ -178,7 +193,10 @@ data class ExerciseLog(
         put("id", id)
         put("exercise_id", exerciseId ?: JSONObject.NULL)
         put("name", name)
-        put("target", target)
+        put("goal_sets", goalSets ?: JSONObject.NULL)
+        put("goal_reps", goalReps)
+        put("goal_weight_kg", goalWeight)
+        put("goal_minutes", goalMinutes ?: JSONObject.NULL)
         put("note", note)
         put("technique_url", techniqueUrl ?: JSONObject.NULL)
         put("kind", kind.code)
@@ -191,24 +209,35 @@ data class ExerciseLog(
     companion object {
         fun fromProgram(ex: ProgramExercise): ExerciseLog {
             val sets = if (ex.kind == ExerciseKind.CARDIO) emptyList()
-            else List(parseSetCount(ex.target)) { SetLog() }
+            else List(plannedSetCount(ex.goalSets)) {
+                SetLog(weightKg = planNumber(ex.goalWeight), reps = planWhole(ex.goalReps))
+            }
             return ExerciseLog(
                 exerciseId = ex.id,
                 name = ex.name,
-                target = ex.target,
+                goalSets = ex.goalSets,
+                goalReps = ex.goalReps,
+                goalWeight = ex.goalWeight,
+                goalMinutes = ex.goalMinutes,
                 note = ex.note,
                 techniqueUrl = ex.techniqueUrl,
                 kind = ex.kind,
                 isCustom = false,
                 sets = sets,
+                minutes = if (ex.kind == ExerciseKind.CARDIO) ex.goalMinutes else null,
             )
         }
 
-        fun fromJson(o: JSONObject): ExerciseLog = ExerciseLog(
+        fun fromJson(o: JSONObject): ExerciseLog {
+            val legacy = parseLegacyTarget(o.optString("target", ""))
+            return ExerciseLog(
             id = o.optString("id", UUID.randomUUID().toString()),
             exerciseId = o.optStringOrNull("exercise_id"),
             name = o.optString("name", ""),
-            target = o.optString("target", ""),
+            goalSets = o.optIntOrNull("goal_sets") ?: legacy.sets,
+            goalReps = o.optString("goal_reps", "").ifBlank { legacy.reps },
+            goalWeight = o.optString("goal_weight_kg", "").ifBlank { legacy.weight },
+            goalMinutes = o.optIntOrNull("goal_minutes") ?: legacy.minutes,
             note = o.optString("note", ""),
             techniqueUrl = o.optStringOrNull("technique_url"),
             kind = ExerciseKind.fromCode(o.optString("kind", "strength")),
@@ -217,6 +246,7 @@ data class ExerciseLog(
             sets = o.optJSONArray("sets")?.mapObjects { SetLog.fromJson(it) }.orEmpty(),
             minutes = o.optIntOrNull("minutes"),
         )
+        }
     }
 }
 
@@ -243,7 +273,7 @@ data class WorkoutLog(
 
     fun markLabel(): String = when {
         cancelled -> "отменена"
-        isFullyDone -> "сделано"
+        isFullyDone -> "завершено"
         isPartial || hasProgress -> "частично"
         else -> "есть запись"
     }
@@ -312,11 +342,46 @@ fun formatWeight(w: Float): String =
 fun normalizeExerciseName(name: String): String =
     name.trim().lowercase().replace(Regex("\\s+"), " ")
 
-/** Из цели вида «3 × 10–12» берём число подходов. */
-fun parseSetCount(target: String): Int {
-    val m = Regex("""(\d+)\s*[×xX*]""").find(target)
-    return m?.groupValues?.get(1)?.toIntOrNull()?.coerceIn(1, 12) ?: 3
+/** Сколько строк подходов создать в факте, если в плане указано число. */
+fun plannedSetCount(sets: Int?): Int = (sets ?: 3).coerceIn(1, 12)
+
+/** Первое число из плана: вес «8» или «8–10» становится 8. */
+fun planNumber(text: String): Float? =
+    Regex("""\d+(?:[.,]\d+)?""").find(text)?.value?.replace(',', '.')?.toFloatOrNull()
+
+/** Первое целое из плана: повторы «10–12» или «40 сек» становятся 10 и 40. */
+fun planWhole(text: String): Int? =
+    Regex("""\d+""").find(text)?.value?.toIntOrNull()
+
+data class ParsedGoal(
+    val sets: Int?,
+    val reps: String,
+    val weight: String,
+    val minutes: Int?,
+)
+
+/** Старые программы хранили цель одной строкой «3 × 10–12» или «40 мин». */
+fun parseLegacyTarget(target: String): ParsedGoal {
+    val text = target.trim()
+    if (text.isEmpty()) return ParsedGoal(null, "", "", null)
+    Regex("""^(\d+)\s*мин\.?$""").find(text)?.let { match ->
+        return ParsedGoal(null, "", "", match.groupValues[1].toIntOrNull())
+    }
+    Regex("""^(\d+)\s*[×xX*]\s*(.+)$""").find(text)?.let { match ->
+        return ParsedGoal(match.groupValues[1].toIntOrNull(), match.groupValues[2].trim(), "", null)
+    }
+    return ParsedGoal(null, text, "", null)
 }
+
+/** Подходы, повторы и вес отдельными частями, без записи «3 × 10–12». */
+fun prescriptionLine(sets: Int?, reps: String, weight: String, minutes: Int? = null): String = buildList {
+    sets?.let { add("подходы $it") }
+    if (reps.isNotBlank()) {
+        add(if (reps.contains("сек")) reps else "повторы $reps")
+    }
+    if (weight.isNotBlank()) add("вес $weight кг")
+    minutes?.let { add("минуты $it") }
+}.joinToString(", ")
 
 internal fun JSONObject.optStringOrNull(key: String): String? =
     if (!has(key) || isNull(key)) null else optString(key).ifBlank { null }

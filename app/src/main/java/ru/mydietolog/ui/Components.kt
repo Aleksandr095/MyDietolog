@@ -163,6 +163,25 @@ fun PhotoThumb(file: File?, modifier: Modifier, radius: Dp = 12.dp, description:
 }
 
 @Composable
+fun GoalReadout(sets: Int?, reps: String, weight: String, minutes: Int?) {
+    val items = buildList {
+        sets?.let { add("Подходы" to it.toString()) }
+        if (reps.isNotBlank()) add("Повторы" to reps)
+        if (weight.isNotBlank()) add("Вес" to "$weight кг")
+        minutes?.let { add("Минуты" to it.toString()) }
+    }
+    if (items.isEmpty()) return
+    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        items.forEach { (label, value) ->
+            Column {
+                Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted)
+                Text(value, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Palette.ink)
+            }
+        }
+    }
+}
+
+@Composable
 fun appFieldColors(container: Color = Palette.surface) = OutlinedTextFieldDefaults.colors(
     focusedBorderColor = Palette.accent,
     unfocusedBorderColor = Palette.field,

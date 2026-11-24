@@ -100,22 +100,21 @@ fun WorkoutSessionScreen(vm: AppViewModel) {
             }
         }
 
-        Column(
+        Row(
             Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (draft.sessionId != null) {
-                PrimaryButton("Выполнено", onClick = { vm.workouts.markPlannedDone() }, icon = AppIcons.check)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrimaryButton(
-                    "Завершить",
-                    onClick = { vm.workouts.finish() },
-                    icon = AppIcons.check,
-                    modifier = Modifier.weight(1f),
-                )
-                SecondaryButton("Отменить", onClick = { vm.workouts.cancel() }, modifier = Modifier.weight(1f))
-            }
+            PrimaryButton(
+                "Сохранить",
+                onClick = { vm.workouts.finish() },
+                icon = AppIcons.check,
+                modifier = Modifier.weight(1f),
+            )
+            SecondaryButton(
+                "Завершить",
+                onClick = { vm.workouts.completeDraft() },
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -140,7 +139,18 @@ private fun ExerciseCard(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             DoneCheck(ex.done, onToggle)
-            Text(ex.name, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Palette.ink, modifier = Modifier.weight(1f))
+            Text(
+                ex.name,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = if (ex.techniqueUrl.isNullOrBlank()) Palette.ink else Palette.accent,
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(enabled = !ex.techniqueUrl.isNullOrBlank()) {
+                        val url = ex.techniqueUrl ?: return@clickable
+                        onTechnique(url)
+                    },
+            )
             if (ex.isCustom) {
                 Text(
                     "вне плана",
@@ -155,24 +165,12 @@ private fun ExerciseCard(
             }
         }
 
-        if (ex.target.isNotBlank()) {
-            Text("Цель: ${ex.target}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted)
-        }
-        if (ex.note.isNotBlank()) {
-            Text(ex.note, fontSize = 13.sp, color = Palette.inkSoft)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (!ex.techniqueUrl.isNullOrBlank()) {
-                Text(
-                    "Техника ↗",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Palette.accent,
-                    modifier = Modifier.clickable { onTechnique(ex.techniqueUrl!!) },
-                )
-            }
-            Text("в прошлый раз: ${ex.lastTimeLabel}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted)
-        }
+        Text(
+            "в прошлый раз: ${ex.lastTimeLabel}",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Palette.muted,
+        )
 
         if (ex.kind == ExerciseKind.CARDIO) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
