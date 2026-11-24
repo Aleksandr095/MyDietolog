@@ -205,6 +205,20 @@ class WorkoutController(
         }
     }
 
+    fun clearHistory() {
+        scope.launch { repo.clearLogs() }
+    }
+
+    fun deleteProgram() {
+        scope.launch {
+            repo.deleteProgram()
+            programEdit = null
+            programPreview = null
+            programError = null
+            if (nav.current is Screen.ProgramEdit) nav.popOne()
+        }
+    }
+
     fun setSessionWeekday(session: SessionEdit, weekday: Int) {
         val edit = programEdit ?: return
         val day = weekday.coerceIn(1, 7)

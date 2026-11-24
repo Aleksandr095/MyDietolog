@@ -33,6 +33,7 @@ import ru.mydietolog.ui.ProgramEditScreen
 import ru.mydietolog.ui.Screen
 import ru.mydietolog.ui.SettingsScreen
 import ru.mydietolog.ui.WorkoutHistoryScreen
+import ru.mydietolog.ui.WorkoutMonthScreen
 import ru.mydietolog.ui.WorkoutPlanScreen
 import ru.mydietolog.ui.WorkoutProgramScreen
 import ru.mydietolog.ui.WorkoutSessionScreen
@@ -72,6 +73,7 @@ class MainActivity : ComponentActivity() {
                             is Screen.WorkoutPlan -> WorkoutPlanScreen(vm, screen.date)
                             Screen.WorkoutProgram -> WorkoutProgramScreen(vm)
                             Screen.WorkoutHistory -> WorkoutHistoryScreen(vm)
+                            is Screen.WorkoutMonth -> WorkoutMonthScreen(vm, screen.month)
                             Screen.ProgramEdit -> ProgramEditScreen(vm)
                             Screen.CustomExercise -> CustomExerciseScreen(vm)
                             Screen.Settings -> SettingsScreen(vm)

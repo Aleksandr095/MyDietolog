@@ -13,10 +13,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +36,7 @@ import java.time.YearMonth
 @Composable
 fun WorkoutHistoryScreen(vm: AppViewModel) {
     val logs by vm.workouts.logs.collectAsState()
+    var confirmClear by remember { mutableStateOf(false) }
     val months = logs
         .sortedWith(compareByDescending<WorkoutLog> { it.date }.thenByDescending { it.createdAt })
         .groupBy { YearMonth.from(it.date) }
@@ -49,7 +55,8 @@ fun WorkoutHistoryScreen(vm: AppViewModel) {
             )
         } else {
             LazyColumn(
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 20.dp),
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 months.forEach { (month, weeks) ->
@@ -78,6 +85,30 @@ fun WorkoutHistoryScreen(vm: AppViewModel) {
                     }
                 }
             }
+            TextButton(
+                onClick = { confirmClear = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+            ) {
+                Text("Очистить историю", fontWeight = FontWeight.Bold, color = Palette.danger)
+            }
+        }
+        if (confirmClear) {
+            AlertDialog(
+                onDismissRequest = { confirmClear = false },
+                title = { Text("Очистить историю?") },
+                text = { Text("Все записанные тренировки будут удалены.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        confirmClear = false
+                        vm.workouts.clearHistory()
+                    }) { Text("Очистить", color = Palette.danger) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmClear = false }) { Text("Отмена") }
+                },
+            )
         }
     }
 }

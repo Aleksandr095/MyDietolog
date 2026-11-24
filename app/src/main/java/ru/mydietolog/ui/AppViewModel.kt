@@ -45,6 +45,7 @@ sealed interface Screen {
     data class WorkoutPlan(val date: LocalDate) : Screen
     data object WorkoutProgram : Screen
     data object WorkoutHistory : Screen
+    data class WorkoutMonth(val month: YearMonth) : Screen
     data object ProgramEdit : Screen
     data object CustomExercise : Screen
 }
