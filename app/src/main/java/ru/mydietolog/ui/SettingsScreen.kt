@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,6 +56,7 @@ import ru.mydietolog.reminders.ReminderNotifier
 @Composable
 fun SettingsScreen(vm: AppViewModel) {
     val s by vm.reminders.collectAsState()
+    val theme by vm.theme.collectAsState()
     val context = LocalContext.current
 
     var notificationsAllowed by remember { mutableStateOf(ReminderNotifier.canNotify(context)) }
@@ -76,6 +78,25 @@ fun SettingsScreen(vm: AppViewModel) {
                 .padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            Text("Тема", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Palette.ink)
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ChoiceChip("Как в Android", theme == AppTheme.SYSTEM) { vm.setTheme(AppTheme.SYSTEM) }
+                ChoiceChip("Светлая", theme == AppTheme.LIGHT) { vm.setTheme(AppTheme.LIGHT) }
+                ChoiceChip("Тёмная", theme == AppTheme.DARK) { vm.setTheme(AppTheme.DARK) }
+            }
+            Text(
+                when (theme) {
+                    AppTheme.SYSTEM -> "Повторяет тёмную или светлую тему Android."
+                    AppTheme.LIGHT -> "Всегда светлая тема."
+                    AppTheme.DARK -> "Всегда тёмная тема."
+                },
+                fontSize = 13.sp,
+                color = Palette.muted,
+            )
+
             if (!notificationsAllowed) {
                 InfoBanner("Уведомления выключены — напоминания не будут приходить.", warning = true)
                 if (Build.VERSION.SDK_INT >= 33) {

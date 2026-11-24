@@ -41,6 +41,7 @@ import ru.mydietolog.data.movedFrom
 import ru.mydietolog.data.sessionOn
 import ru.mydietolog.data.weekStart
 import java.time.LocalDate
+import java.time.YearMonth
 
 @Composable
 fun WorkoutsHomeScreen(vm: AppViewModel) {
@@ -60,23 +61,17 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 8.dp, top = 16.dp, bottom = 4.dp),
+                .padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
                 Text("MyDietolog", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted)
-                Text("Тренировки", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = Palette.ink)
-                Text(
-                    if (program != null) "${Ru.weekRange(weekStart)} · ${program!!.title}"
-                    else "Программа ещё не загружена",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Palette.muted,
-                )
+                Text(Ru.monthYear(selected), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = Palette.ink)
             }
-            TextButton(onClick = { vm.workouts.openProgram() }) {
-                Text("Программа", fontWeight = FontWeight.Bold, color = Palette.accent)
-            }
+            RoundIcon(AppIcons.left, "Предыдущая неделя", { vm.workouts.selectDate(selected.minusWeeks(1)) })
+            RoundIcon(AppIcons.right, "Следующая неделя", { vm.workouts.selectDate(selected.plusWeeks(1)) })
+            RoundIcon(AppIcons.calendar, "Календарь месяца", { vm.push(Screen.Month(YearMonth.from(selected))) }, outlined = true)
+            RoundIcon(AppIcons.settings, "Настройки", { vm.push(Screen.Settings) }, outlined = true)
         }
 
         LazyColumn(
@@ -84,12 +79,8 @@ fun WorkoutsHomeScreen(vm: AppViewModel) {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Текущая неделя", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Palette.muted)
-                    WorkoutWeekStrip(vm, weekStart, today, selected)
-                }
-            }
+            item { WorkoutWeekStrip(vm, weekStart, today, selected) }
+            item { SecondaryButton("Программа", onClick = { vm.workouts.openProgram() }) }
 
             item {
                 SelectedDayCard(

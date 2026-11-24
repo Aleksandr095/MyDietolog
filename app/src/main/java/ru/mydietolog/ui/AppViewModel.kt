@@ -115,11 +115,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
     val workoutRepo = WorkoutRepository(app)
     val marksRepo = DayMarksRepository(app)
     val reminderRepo = ReminderSettingsRepository(app)
+    val themeStore = ThemeStore(app)
     private val exporter = Exporter(app, repo)
 
     val meals = repo.meals
     val marks = marksRepo.marks
     val reminders = reminderRepo.settings
+    val theme = themeStore.choice
     val workouts = WorkoutController(workoutRepo, viewModelScope, this)
 
     var tab by mutableStateOf(MainTab.DIARY)
@@ -164,6 +166,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
     fun updateMarks(date: LocalDate, change: (DayMarks) -> DayMarks) {
         viewModelScope.launch { marksRepo.update(date, change) }
     }
+
+    fun setTheme(value: AppTheme) { themeStore.set(value) }
 
     fun updateReminders(change: (ReminderSettings) -> ReminderSettings) {
         viewModelScope.launch {
