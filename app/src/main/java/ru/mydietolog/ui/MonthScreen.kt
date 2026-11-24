@@ -146,7 +146,7 @@ fun MonthScreen(vm: AppViewModel, initial: YearMonth) {
                 )
                 Text(Ru.meals(week.mealCount), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted)
             }
-            PrimaryButton("Выгрузить эту неделю", onClick = { vm.push(Screen.Export(selWeek)) }, icon = AppIcons.download, dark = true)
+            PrimaryButton("Выгрузить эту неделю", onClick = { vm.push(Screen.Export(selWeek)) }, icon = AppIcons.download)
         }
     }
 }

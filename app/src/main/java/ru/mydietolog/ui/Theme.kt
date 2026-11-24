@@ -1,6 +1,8 @@
 package ru.mydietolog.ui
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -10,6 +12,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -169,7 +174,22 @@ object Palette {
 
 @Composable
 fun MyDietologTheme(dark: Boolean, content: @Composable () -> Unit) {
-    SideEffect { Palette.apply(dark) }
+    val view = LocalView.current
+    val bar = if (dark) Dark.bg else Light.bg
+    if (!view.isInEditMode) {
+        SideEffect {
+            Palette.apply(dark)
+            val activity = view.context.findActivity() ?: return@SideEffect
+            val window = activity.window
+            window.statusBarColor = bar.toArgb()
+            window.navigationBarColor = bar.toArgb()
+            val controller = WindowCompat.getInsetsController(window, view)
+            controller.isAppearanceLightStatusBars = !dark
+            controller.isAppearanceLightNavigationBars = !dark
+        }
+    } else {
+        SideEffect { Palette.apply(dark) }
+    }
     MaterialTheme(
         colorScheme = if (dark) {
             darkColorScheme(
@@ -204,4 +224,13 @@ fun MyDietologTheme(dark: Boolean, content: @Composable () -> Unit) {
         },
         content = content,
     )
+}
+
+private fun Context.findActivity(): Activity? {
+    var current: Context = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
 }

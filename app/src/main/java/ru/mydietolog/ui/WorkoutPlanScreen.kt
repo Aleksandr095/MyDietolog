@@ -135,5 +135,6 @@ private fun PlanExerciseRow(index: Int, ex: ProgramExercise) {
                     },
             )
         }
+        GoalReadout(ex.goalSets, ex.goalReps, ex.goalWeight, ex.goalMinutes)
     }
 }
