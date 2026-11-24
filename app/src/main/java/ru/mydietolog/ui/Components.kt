@@ -118,11 +118,11 @@ fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
         enabled = enabled,
         modifier = modifier
             .then(Modifier.fillMaxWidth())
-            .height(48.dp),
-        shape = RoundedCornerShape(16.dp),
+            .height(56.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = ButtonDefaults.outlinedButtonColors(containerColor = Palette.surface, contentColor = Palette.ink),
     ) {
-        Text(text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text(text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
     }
 }
 

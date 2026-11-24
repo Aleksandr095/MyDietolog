@@ -1,15 +1,19 @@
 package ru.mydietolog
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import ru.mydietolog.ui.AppViewModel
 import java.time.LocalDate
@@ -21,8 +25,10 @@ import ru.mydietolog.ui.ExportScreen
 import ru.mydietolog.ui.MainTab
 import ru.mydietolog.ui.MealEditScreen
 import ru.mydietolog.ui.MonthScreen
+import ru.mydietolog.ui.AppTheme
 import ru.mydietolog.ui.MyDietologTheme
 import ru.mydietolog.ui.Palette
+import ru.mydietolog.ui.resolveDark
 import ru.mydietolog.ui.ProgramEditScreen
 import ru.mydietolog.ui.Screen
 import ru.mydietolog.ui.SettingsScreen
@@ -39,8 +45,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) openFromIntent(intent)
+        val systemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        Palette.apply(resolveDark(vm.theme.value, systemDark))
         setContent {
-            MyDietologTheme {
+            val theme by vm.theme.collectAsState()
+            MyDietologTheme(dark = resolveDark(theme, isSystemInDarkTheme())) {
                 val screen = vm.current
                 val showTabs = screen is Screen.Day || screen is Screen.WorkoutsHome
 
