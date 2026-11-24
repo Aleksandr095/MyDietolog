@@ -219,7 +219,8 @@ class Exporter(private val context: Context, private val repo: Repository) {
             val status = if (ex.done) "✓" else "○"
             val tags = buildList {
                 if (ex.isCustom) add("вне плана")
-                if (ex.target.isNotBlank()) add("цель: ${ex.target}")
+                val goal = prescriptionLine(ex.goalSets, ex.goalReps, ex.goalWeight, ex.goalMinutes)
+                if (goal.isNotBlank()) add(goal)
             }.joinToString(" · ")
             appendLine("${i + 1}. $status **${ex.name}**" + if (tags.isNotBlank()) " ($tags)" else "")
             if (ex.note.isNotBlank()) appendLine("   - заметка: ${ex.note}")
@@ -231,10 +232,12 @@ class Exporter(private val context: Context, private val repo: Repository) {
                     val sets = ex.sets.filter { it.done || it.reps != null || it.weightKg != null }
                     if (sets.isNotEmpty()) {
                         val lines = sets.mapIndexed { si, s ->
-                            val w = s.weightKg?.let { "${formatWeight(it)} кг" } ?: "—"
-                            val r = s.reps?.toString() ?: "—"
+                            val parts = buildList {
+                                s.weightKg?.let { add("вес ${formatWeight(it)} кг") }
+                                s.reps?.let { add("повторы $it") }
+                            }
                             val mark = if (s.done) "✓" else "○"
-                            "${si + 1}) $w × $r $mark"
+                            "${si + 1}) ${parts.joinToString(", ").ifBlank { "—" }} $mark"
                         }
                         appendLine("   - подходы: ${lines.joinToString("; ")}")
                     }

@@ -2,6 +2,7 @@ package ru.mydietolog.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,11 +12,13 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -29,6 +32,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.mydietolog.data.ExerciseKind
@@ -41,23 +45,33 @@ import java.util.UUID
 class ExerciseEdit(
     val id: String = UUID.randomUUID().toString(),
     name: String = "",
-    target: String = "3 × 10",
+    sets: String = "3",
+    reps: String = "10",
+    weight: String = "",
+    minutes: String = "",
     note: String = "",
     val techniqueUrl: String? = null,
     kind: ExerciseKind = ExerciseKind.STRENGTH,
 ) {
     var name by mutableStateOf(name)
-    var target by mutableStateOf(target)
+    var sets by mutableStateOf(sets)
+    var reps by mutableStateOf(reps)
+    var weight by mutableStateOf(weight)
+    var minutes by mutableStateOf(minutes)
     var note by mutableStateOf(note)
     var kind by mutableStateOf(kind)
 
     fun toExercise(): ProgramExercise? {
         val title = name.trim()
         if (title.isBlank()) return null
+        val cardio = kind == ExerciseKind.CARDIO
         return ProgramExercise(
             id = id,
             name = title,
-            target = target.trim(),
+            goalSets = if (cardio) null else sets.toIntOrNull(),
+            goalReps = if (cardio) "" else reps.trim(),
+            goalWeight = if (cardio) "" else weight.trim(),
+            goalMinutes = if (cardio) minutes.toIntOrNull() else null,
             note = note.trim(),
             techniqueUrl = techniqueUrl,
             kind = kind,
@@ -65,7 +79,17 @@ class ExerciseEdit(
     }
 
     companion object {
-        fun from(ex: ProgramExercise) = ExerciseEdit(ex.id, ex.name, ex.target, ex.note, ex.techniqueUrl, ex.kind)
+        fun from(ex: ProgramExercise) = ExerciseEdit(
+            id = ex.id,
+            name = ex.name,
+            sets = ex.goalSets?.toString() ?: "",
+            reps = ex.goalReps,
+            weight = ex.goalWeight,
+            minutes = ex.goalMinutes?.toString() ?: "",
+            note = ex.note,
+            techniqueUrl = ex.techniqueUrl,
+            kind = ex.kind,
+        )
     }
 }
 
@@ -181,12 +205,24 @@ private fun SessionEditor(session: SessionEdit, onWeekday: (Int) -> Unit, onDele
             .background(Palette.surface)
             .border(1.dp, Palette.line, shape)
             .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Занятие",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Palette.muted,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onDelete) {
+                Text("Удалить", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Palette.danger)
+            }
+        }
         OutlinedTextField(
             value = session.name,
             onValueChange = { session.name = it },
-            label = { Text("Занятие") },
+            label = { Text("Название") },
             singleLine = true,
             textStyle = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold),
             shape = RoundedCornerShape(12.dp),
@@ -194,22 +230,33 @@ private fun SessionEditor(session: SessionEdit, onWeekday: (Int) -> Unit, onDele
             modifier = Modifier.fillMaxWidth(),
         )
         Text("День недели", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             Ru.weekdaysShort.forEachIndexed { index, label ->
                 ChoiceChip(label, selected = session.weekday == index + 1) { onWeekday(index + 1) }
             }
         }
+        Text("Упражнения", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted)
         session.exercises.forEach { exercise ->
             ExerciseEditor(exercise) { session.exercises.remove(exercise) }
         }
         SecondaryButton("Добавить упражнение", onClick = { session.exercises.add(ExerciseEdit()) })
-        SecondaryButton("Удалить занятие", onClick = onDelete)
     }
 }
 
 @Composable
 private fun ExerciseEditor(exercise: ExerciseEdit, onDelete: () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val shape = RoundedCornerShape(14.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Palette.bg)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = exercise.name,
@@ -218,30 +265,37 @@ private fun ExerciseEditor(exercise: ExerciseEdit, onDelete: () -> Unit) {
                 singleLine = true,
                 textStyle = TextStyle(fontSize = 15.sp),
                 shape = RoundedCornerShape(12.dp),
-                colors = appFieldColors(Palette.bg),
+                colors = appFieldColors(Palette.surface),
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = onDelete, modifier = Modifier.semantics { contentDescription = "Удалить упражнение" }) {
                 Icon(AppIcons.delete, contentDescription = null, tint = Palette.muted)
             }
         }
-        OutlinedTextField(
-            value = exercise.target,
-            onValueChange = { exercise.target = it },
-            label = { Text("Цель") },
-            placeholder = { Text("3 × 10–12") },
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = appFieldColors(Palette.bg),
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (exercise.kind == ExerciseKind.CARDIO) {
+            GoalInput("Минуты", exercise.minutes, KeyboardType.Number) {
+                exercise.minutes = it.filter(Char::isDigit).take(3)
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GoalInput("Подходы", exercise.sets, KeyboardType.Number, Modifier.weight(1f)) {
+                    exercise.sets = it.filter(Char::isDigit).take(2)
+                }
+                GoalInput("Повторы", exercise.reps, KeyboardType.Text, Modifier.weight(1f)) {
+                    exercise.reps = it.filter { ch -> ch.isDigit() || ch == '-' || ch == '–' || ch.isLetter() || ch == ' ' }.take(12)
+                }
+                GoalInput("Вес, кг", exercise.weight, KeyboardType.Decimal, Modifier.weight(1f)) {
+                    exercise.weight = it.filter { ch -> ch.isDigit() || ch == '.' || ch == ',' || ch == '-' || ch == '–' }.take(8)
+                }
+            }
+        }
         OutlinedTextField(
             value = exercise.note,
             onValueChange = { exercise.note = it },
             label = { Text("Заметка") },
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
-            colors = appFieldColors(Palette.bg),
+            colors = appFieldColors(Palette.surface),
             modifier = Modifier.fillMaxWidth(),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -249,4 +303,25 @@ private fun ExerciseEditor(exercise: ExerciseEdit, onDelete: () -> Unit) {
             ChoiceChip("Кардио", selected = exercise.kind == ExerciseKind.CARDIO) { exercise.kind = ExerciseKind.CARDIO }
         }
     }
+}
+
+@Composable
+private fun GoalInput(
+    label: String,
+    value: String,
+    keyboard: KeyboardType,
+    modifier: Modifier = Modifier,
+    onChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = keyboard),
+        textStyle = TextStyle(fontSize = 15.sp),
+        shape = RoundedCornerShape(12.dp),
+        colors = appFieldColors(Palette.surface),
+        modifier = modifier.fillMaxWidth(),
+    )
 }

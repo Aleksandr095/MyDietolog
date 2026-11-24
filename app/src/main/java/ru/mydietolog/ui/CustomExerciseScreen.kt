@@ -95,10 +95,10 @@ fun CustomExerciseScreen(vm: AppViewModel) {
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 NumberBox("Подходы", w.customSets, { w.customSets = it.filter(Char::isDigit).take(2) }, Modifier.weight(1f))
+                NumberBox("Повторы", w.customReps, { w.customReps = it.filter(Char::isDigit).take(3) }, Modifier.weight(1f))
                 NumberBox("Вес, кг", w.customWeight, {
                     w.customWeight = it.filter { ch -> ch.isDigit() || ch == '.' || ch == ',' }.take(6)
                 }, Modifier.weight(1f))
-                NumberBox("Повторы", w.customReps, { w.customReps = it.filter(Char::isDigit).take(3) }, Modifier.weight(1f))
             }
 
             Text(

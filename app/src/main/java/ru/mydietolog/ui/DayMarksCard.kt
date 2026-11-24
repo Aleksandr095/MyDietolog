@@ -126,15 +126,15 @@ private fun MarkCircle(
         Box(
             Modifier
                 .size(68.dp)
-                .clip(CircleShape)
-                .background(if (filled) Palette.accent else Palette.placeholder),
+                .then(if (filled) Modifier.border(1.5.dp, Palette.accent, CircleShape) else Modifier)
+                .background(if (filled) Palette.surface else Palette.placeholder, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 value,
                 fontSize = if (value == "+") 28.sp else 18.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (filled) Color.White else Palette.ink,
+                color = if (filled) Palette.accent else Palette.ink,
                 textAlign = TextAlign.Center,
             )
         }

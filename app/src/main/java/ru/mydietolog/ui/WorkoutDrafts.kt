@@ -10,6 +10,10 @@ import ru.mydietolog.data.ExerciseLog
 import ru.mydietolog.data.SetLog
 import ru.mydietolog.data.WorkoutLog
 import ru.mydietolog.data.formatLastTime
+import ru.mydietolog.data.formatWeight
+import ru.mydietolog.data.planNumber
+import ru.mydietolog.data.planWhole
+import ru.mydietolog.data.plannedSetCount
 import java.time.LocalDate
 import java.util.UUID
 
@@ -41,7 +45,10 @@ class ExerciseDraft(
     val id: String = UUID.randomUUID().toString(),
     val exerciseId: String? = null,
     name: String,
-    val target: String = "",
+    val goalSets: Int? = null,
+    val goalReps: String = "",
+    val goalWeight: String = "",
+    val goalMinutes: Int? = null,
     val note: String = "",
     val techniqueUrl: String? = null,
     val kind: ExerciseKind = ExerciseKind.STRENGTH,
@@ -60,7 +67,10 @@ class ExerciseDraft(
         id = id,
         exerciseId = exerciseId,
         name = name.trim(),
-        target = target,
+        goalSets = goalSets,
+        goalReps = goalReps,
+        goalWeight = goalWeight,
+        goalMinutes = goalMinutes,
         note = note,
         techniqueUrl = techniqueUrl,
         kind = kind,
@@ -70,12 +80,46 @@ class ExerciseDraft(
         minutes = if (kind == ExerciseKind.CARDIO) minutes.toIntOrNull() else null,
     )
 
+    /** Пустые поля факта заполняются числами из плана. Уже введённое не затирается. */
+    fun fillBlankFromPlan(): Boolean {
+        var changed = false
+        if (kind == ExerciseKind.CARDIO) {
+            if (minutes.isBlank() && goalMinutes != null) {
+                minutes = goalMinutes.toString()
+                changed = true
+            }
+            return changed
+        }
+        val weight = planNumber(goalWeight)?.let { formatWeight(it) }.orEmpty()
+        val reps = planWhole(goalReps)?.toString().orEmpty()
+        val untouched = sets.all { it.weight.isBlank() && it.reps.isBlank() && !it.done }
+        if (untouched && (weight.isNotBlank() || reps.isNotBlank())) {
+            sets.clear()
+            repeat(plannedSetCount(goalSets)) { sets.add(SetDraft(weight = weight, reps = reps)) }
+            return true
+        }
+        sets.forEach { set ->
+            if (set.weight.isBlank() && weight.isNotBlank()) {
+                set.weight = weight
+                changed = true
+            }
+            if (set.reps.isBlank() && reps.isNotBlank()) {
+                set.reps = reps
+                changed = true
+            }
+        }
+        return changed
+    }
+
     companion object {
         fun from(ex: ExerciseLog, lastTimeLabel: String) = ExerciseDraft(
             id = ex.id,
             exerciseId = ex.exerciseId,
             name = ex.name,
-            target = ex.target,
+            goalSets = ex.goalSets,
+            goalReps = ex.goalReps,
+            goalWeight = ex.goalWeight,
+            goalMinutes = ex.goalMinutes,
             note = ex.note,
             techniqueUrl = ex.techniqueUrl,
             kind = ex.kind,
@@ -86,7 +130,7 @@ class ExerciseDraft(
             },
             minutes = ex.minutes?.toString() ?: "",
             lastTimeLabel = lastTimeLabel,
-        )
+        ).also { it.fillBlankFromPlan() }
     }
 }
 

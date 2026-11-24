@@ -238,12 +238,12 @@ private fun MealCircle(
             Box(
                 Modifier
                     .size(68.dp)
-                    .clip(CircleShape)
-                    .background(if (meal == null) Palette.placeholder else Palette.accent),
+                    .then(if (meal == null) Modifier else Modifier.border(1.5.dp, Palette.accent, CircleShape))
+                    .background(if (meal == null) Palette.placeholder else Palette.surface, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 if (meal != null) {
-                    Icon(AppIcons.check, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(AppIcons.check, contentDescription = null, tint = Palette.accent, modifier = Modifier.size(22.dp))
                 }
             }
             Box(
