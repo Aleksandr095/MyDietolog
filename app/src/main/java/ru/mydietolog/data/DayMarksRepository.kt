@@ -46,6 +46,28 @@ class DayMarksRepository(context: Context) {
         persist(updated)
     }
 
+    /** Месячные на каждый день от [from] до [to] включительно. Один проход и одна запись. */
+    suspend fun setMenstruation(from: LocalDate, to: LocalDate, value: Boolean?) {
+        val start = minOf(from, to)
+        val end = maxOf(from, to)
+        val current = _marks.value.toMutableList()
+        var date = start
+        while (!date.isAfter(end)) {
+            val index = current.indexOfFirst { it.date == date }
+            val existing = if (index >= 0) current[index] else DayMarks(date)
+            val changed = existing.copy(menstruation = value)
+            when {
+                changed.isEmpty -> if (index >= 0) current.removeAt(index)
+                index >= 0 -> current[index] = changed
+                else -> current.add(changed)
+            }
+            date = date.plusDays(1)
+        }
+        val updated = current.toList()
+        _marks.value = updated
+        persist(updated)
+    }
+
     private suspend fun persist(list: List<DayMarks>) = withContext(Dispatchers.IO) {
         val root = JSONObject().apply {
             put("version", 1)

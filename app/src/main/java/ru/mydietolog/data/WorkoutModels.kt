@@ -389,5 +389,13 @@ internal fun JSONObject.optStringOrNull(key: String): String? =
 internal fun JSONObject.optFloatOrNull(key: String): Float? =
     if (!has(key) || isNull(key)) null else optDouble(key).toFloat()
 
+/** Нет ключа, null, нечисло, бесконечность и отрицательное — null. */
+internal fun JSONObject.optDoubleOrNull(key: String): Double? {
+    if (!has(key) || isNull(key)) return null
+    val value = optDouble(key)
+    if (value.isNaN() || value.isInfinite() || value < 0.0) return null
+    return value
+}
+
 internal inline fun <T> JSONArray.mapObjects(crossinline block: (JSONObject) -> T): List<T> =
     (0 until length()).map { block(getJSONObject(it)) }

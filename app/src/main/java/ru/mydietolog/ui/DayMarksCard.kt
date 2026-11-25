@@ -7,15 +7,22 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,14 +36,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import ru.mydietolog.data.DayMarks
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import kotlin.math.roundToInt
 
 private enum class MarkScale { HUNGER, STRESS }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DayMarksCard(marks: DayMarks?, onChange: ((DayMarks) -> DayMarks) -> Unit) {
+fun DayMarksCard(
+    date: LocalDate,
+    marks: DayMarks?,
+    onChange: ((DayMarks) -> DayMarks) -> Unit,
+    onMenstruation: (LocalDate, LocalDate, Boolean?) -> Unit,
+) {
     var scale by remember { mutableStateOf<MarkScale?>(null) }
+    var periodOpen by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(22.dp)
     Column(
         Modifier
@@ -70,15 +89,7 @@ fun DayMarksCard(marks: DayMarks?, onChange: ((DayMarks) -> DayMarks) -> Unit) {
                 },
                 onClick = {
                     scale = null
-                    onChange { m ->
-                        m.copy(
-                            menstruation = when (m.menstruation) {
-                                null -> true
-                                true -> false
-                                false -> null
-                            },
-                        )
-                    }
+                    periodOpen = true
                 },
             )
             MarkCircle(
@@ -109,6 +120,105 @@ fun DayMarksCard(marks: DayMarks?, onChange: ((DayMarks) -> DayMarks) -> Unit) {
             )
         }
     }
+    if (periodOpen) {
+        MenstruationPeriodDialog(
+            monthMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+            onDismiss = { periodOpen = false },
+            onSave = { from, to ->
+                periodOpen = false
+                onMenstruation(from, to, true)
+            },
+            onClear = { from, to ->
+                periodOpen = false
+                onMenstruation(from, to, null)
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MenstruationPeriodDialog(
+    monthMillis: Long,
+    onDismiss: () -> Unit,
+    onSave: (LocalDate, LocalDate) -> Unit,
+    onClear: (LocalDate, LocalDate) -> Unit,
+) {
+    val state = rememberDateRangePickerState(initialDisplayedMonthMillis = monthMillis)
+    val startMillis = state.selectedStartDateMillis
+    val endMillis = state.selectedEndDateMillis
+    val ready = startMillis != null
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier
+                .padding(horizontal = 8.dp, vertical = 12.dp)
+                .fillMaxWidth()
+                .heightIn(max = 640.dp)
+                .fillMaxHeight(),
+            shape = RoundedCornerShape(28.dp),
+            color = Palette.surface,
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                DateRangePicker(
+                    state = state,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    showModeToggle = false,
+                    title = {
+                        Text(
+                            "Период сохранится на каждый день от и до",
+                            modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp),
+                            fontSize = 14.sp,
+                            lineHeight = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Palette.inkSoft,
+                        )
+                    },
+                )
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = {
+                            val start = startMillis ?: return@TextButton
+                            val range = menstruationRange(start, endMillis)
+                            onClear(range.first, range.second)
+                        },
+                        enabled = ready,
+                    ) {
+                        Text("Снять", color = if (ready) Palette.accent else Palette.muted)
+                    }
+                    TextButton(onClick = onDismiss) {
+                        Text("Отмена", color = Palette.accent)
+                    }
+                    TextButton(
+                        onClick = {
+                            val start = startMillis ?: return@TextButton
+                            val range = menstruationRange(start, endMillis)
+                            onSave(range.first, range.second)
+                        },
+                        enabled = ready,
+                    ) {
+                        Text("Сохранить", color = if (ready) Palette.accent else Palette.muted)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun menstruationRange(startMillis: Long, endMillis: Long?): Pair<LocalDate, LocalDate> {
+    val start = Instant.ofEpochMilli(startMillis).atZone(ZoneOffset.UTC).toLocalDate()
+    val end = if (endMillis == null) {
+        start
+    } else {
+        Instant.ofEpochMilli(endMillis).atZone(ZoneOffset.UTC).toLocalDate()
+    }
+    return if (start.isAfter(end)) end to start else start to end
 }
 
 @Composable
