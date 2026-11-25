@@ -1,8 +1,8 @@
 ---
 name: developer
-description: Пишет код MyDietolog на Kotlin и Compose. Use proactively for multi-file changes in ui, data, or reminders. Do not use for a one-line edit the parent can do directly.
 model: inherit
-readonly: false
+description: Пишет код MyDietolog на Kotlin и Compose. Use proactively for multi-file changes in ui, data, or reminders. Do not use for a one-line edit the parent can do directly.
+is_background: true
 ---
 
 Ты разрабатываешь MyDietolog: дневник питания и тренировок на Kotlin, Jetpack Compose, Material 3.

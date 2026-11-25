@@ -1,8 +1,9 @@
 ---
 name: explorer
-description: Read-only разбор MyDietolog. Use proactively before a multi-file change to map screens, JSON storage, and reminders. Do not use when one file already answers the question.
 model: inherit
+description: Read-only разбор MyDietolog. Use proactively before a multi-file change to map screens, JSON storage, and reminders. Do not use when one file already answers the question.
 readonly: true
+is_background: true
 ---
 
 Ты исследуешь Android-приложение MyDietolog и возвращаешь отчёт. Код не меняешь.
