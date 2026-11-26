@@ -53,6 +53,7 @@ fun dotsFor(meals: List<Meal>, date: LocalDate): List<Boolean> =
 fun DayScreen(vm: AppViewModel) {
     val all by vm.meals.collectAsState()
     val allMarks by vm.marks.collectAsState()
+    val bodyLog by vm.bodyLog.collectAsState()
     val date = vm.selectedDate
     val weekStart = date.weekStart()
     val dayMeals = all.filter { it.date == date }.sortedWith(ru.mydietolog.data.Repository.mealOrder)
@@ -176,7 +177,21 @@ fun DayScreen(vm: AppViewModel) {
                 )
             }
             item(key = "day_marks_$date") {
-                DayMarksCard(dayMarks) { change -> vm.updateMarks(date, change) }
+                DayMarksCard(
+                    date = date,
+                    marks = dayMarks,
+                    onChange = { change -> vm.updateMarks(date, change) },
+                    onMenstruation = vm::setMenstruation,
+                )
+            }
+            item(key = "body_log_$date") {
+                BodyLogCard(
+                    selectedDate = date,
+                    entries = bodyLog,
+                    onSaveWeight = vm::saveWeight,
+                    onSaveMeasurements = vm::saveMeasurements,
+                    onSaveSemavik = vm::saveSemavik,
+                )
             }
         }
 

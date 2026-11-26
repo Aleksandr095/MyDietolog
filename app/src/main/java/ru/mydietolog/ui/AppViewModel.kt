@@ -13,6 +13,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import ru.mydietolog.data.BodyLogRepository
 import ru.mydietolog.data.DayMarks
 import ru.mydietolog.data.DayMarksRepository
 import ru.mydietolog.data.Dish
@@ -115,12 +116,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
     val repo = Repository(app)
     val workoutRepo = WorkoutRepository(app)
     val marksRepo = DayMarksRepository(app)
+    val bodyLogRepo = BodyLogRepository(app)
     val reminderRepo = ReminderSettingsRepository(app)
     val themeStore = ThemeStore(app)
     private val exporter = Exporter(app, repo)
 
     val meals = repo.meals
     val marks = marksRepo.marks
+    val bodyLog = bodyLogRepo.entries
     val reminders = reminderRepo.settings
     val theme = themeStore.choice
     val workouts = WorkoutController(workoutRepo, viewModelScope, this)
@@ -157,6 +160,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
             repo.load()
             workoutRepo.load()
             marksRepo.load()
+            bodyLogRepo.load()
         }
         viewModelScope.launch {
             reminderRepo.load()
@@ -166,6 +170,31 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
 
     fun updateMarks(date: LocalDate, change: (DayMarks) -> DayMarks) {
         viewModelScope.launch { marksRepo.update(date, change) }
+    }
+
+    fun setMenstruation(from: LocalDate, to: LocalDate, value: Boolean?) {
+        viewModelScope.launch { marksRepo.setMenstruation(from, to, value) }
+    }
+
+    fun saveWeight(date: LocalDate, weightKg: Double?) {
+        viewModelScope.launch { bodyLogRepo.setWeight(date, weightKg) }
+    }
+
+    fun saveMeasurements(
+        date: LocalDate,
+        waistCm: Double?,
+        hipsCm: Double?,
+        chestCm: Double?,
+        thighCm: Double?,
+        armCm: Double?,
+    ) {
+        viewModelScope.launch {
+            bodyLogRepo.setMeasurements(date, waistCm, hipsCm, chestCm, thighCm, armCm)
+        }
+    }
+
+    fun saveSemavik(date: LocalDate, semavikMg: Double?) {
+        viewModelScope.launch { bodyLogRepo.setSemavik(date, semavikMg) }
     }
 
     fun setTheme(value: AppTheme) { themeStore.set(value) }
