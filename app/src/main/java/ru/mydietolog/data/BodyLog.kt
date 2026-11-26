@@ -13,10 +13,19 @@ data class BodyLog(
     val thighCm: Double? = null,
     val armCm: Double? = null,
     val semavikMg: Double? = null,
+    val semavikFrequency: String? = null,
 ) {
     val isEmpty: Boolean
         get() = weightKg == null && waistCm == null && hipsCm == null && chestCm == null &&
-            thighCm == null && armCm == null && semavikMg == null
+            thighCm == null && armCm == null && semavikMg == null && semavikFrequency.isNullOrBlank()
+
+    fun measureCount(): Int = listOf(waistCm, hipsCm, chestCm, thighCm, armCm).count { it != null }
+
+    fun hasWeight(): Boolean = weightKg != null
+
+    fun hasMeasures(): Boolean = measureCount() > 0
+
+    fun hasSemavik(): Boolean = semavikMg != null || !semavikFrequency.isNullOrBlank()
 
     fun toJson(): JSONObject = JSONObject().apply {
         put("date", date.toString())
@@ -27,6 +36,8 @@ data class BodyLog(
         putNumber("thigh_cm", thighCm)
         putNumber("arm_cm", armCm)
         putNumber("semavik_mg", semavikMg)
+        val freq = semavikFrequency?.trim()?.takeIf { it.isNotEmpty() }
+        if (freq != null) put("semavik_frequency", freq)
     }
 
     companion object {
@@ -39,6 +50,7 @@ data class BodyLog(
             thighCm = o.optDoubleOrNull("thigh_cm"),
             armCm = o.optDoubleOrNull("arm_cm"),
             semavikMg = o.optDoubleOrNull("semavik_mg"),
+            semavikFrequency = o.optStringOrNull("semavik_frequency"),
         )
     }
 }

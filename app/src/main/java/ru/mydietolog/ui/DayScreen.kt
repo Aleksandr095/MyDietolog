@@ -180,6 +180,7 @@ fun DayScreen(vm: AppViewModel) {
                 DayMarksCard(
                     date = date,
                     marks = dayMarks,
+                    allMarks = allMarks,
                     onChange = { change -> vm.updateMarks(date, change) },
                     onMenstruation = vm::setMenstruation,
                 )

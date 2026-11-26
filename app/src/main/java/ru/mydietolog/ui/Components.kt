@@ -2,6 +2,7 @@ package ru.mydietolog.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -178,6 +180,50 @@ fun GoalReadout(sets: Int?, reps: String, weight: String, minutes: Int?) {
                 Text(value, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Palette.ink)
             }
         }
+    }
+}
+
+@Composable
+fun MarkCircle(
+    title: String,
+    value: String,
+    filled: Boolean,
+    caption: String,
+    onClick: () -> Unit,
+    showCheck: Boolean = false,
+) {
+    Column(
+        Modifier.clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier
+                .size(68.dp)
+                .then(if (filled) Modifier.border(1.5.dp, Palette.accent, CircleShape) else Modifier)
+                .background(if (filled) Palette.surface else Palette.placeholder, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (showCheck && filled) {
+                Icon(AppIcons.check, contentDescription = null, tint = Palette.accent, modifier = Modifier.size(26.dp))
+            } else {
+                Text(
+                    value,
+                    fontSize = if (value == "+") 28.sp else if (value.length > 4) 14.sp else 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (filled) Palette.accent else Palette.ink,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                )
+            }
+        }
+        Text(
+            title,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = Palette.ink,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Text(caption, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted, maxLines = 2)
     }
 }
 

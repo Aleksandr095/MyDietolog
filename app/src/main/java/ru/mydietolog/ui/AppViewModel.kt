@@ -193,8 +193,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app), WorkoutNav {
         }
     }
 
-    fun saveSemavik(date: LocalDate, semavikMg: Double?) {
-        viewModelScope.launch { bodyLogRepo.setSemavik(date, semavikMg) }
+    fun saveSemavik(date: LocalDate, semavikMg: Double?, frequency: String?) {
+        viewModelScope.launch { bodyLogRepo.setSemavik(date, semavikMg, frequency) }
     }
 
     fun setTheme(value: AppTheme) { themeStore.set(value) }

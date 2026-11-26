@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import ru.mydietolog.data.DayMarks
+import ru.mydietolog.data.menstruationSpanContaining
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -51,6 +52,7 @@ private enum class MarkScale { HUNGER, STRESS }
 fun DayMarksCard(
     date: LocalDate,
     marks: DayMarks?,
+    allMarks: List<DayMarks>,
     onChange: ((DayMarks) -> DayMarks) -> Unit,
     onMenstruation: (LocalDate, LocalDate, Boolean?) -> Unit,
 ) {
@@ -77,11 +79,12 @@ fun DayMarksCard(
             MarkCircle(
                 title = "Месячные",
                 value = when (marks?.menstruation) {
-                    true -> "да"
+                    true -> ""
                     false -> "нет"
                     null -> "+"
                 },
-                filled = marks?.menstruation != null,
+                filled = marks?.menstruation == true || marks?.menstruation == false,
+                showCheck = marks?.menstruation == true,
                 caption = when (marks?.menstruation) {
                     true -> "да"
                     false -> "нет"
@@ -122,7 +125,8 @@ fun DayMarksCard(
     }
     if (periodOpen) {
         MenstruationPeriodDialog(
-            monthMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+            date = date,
+            allMarks = allMarks,
             onDismiss = { periodOpen = false },
             onSave = { from, to ->
                 periodOpen = false
@@ -139,12 +143,19 @@ fun DayMarksCard(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MenstruationPeriodDialog(
-    monthMillis: Long,
+    date: LocalDate,
+    allMarks: List<DayMarks>,
     onDismiss: () -> Unit,
     onSave: (LocalDate, LocalDate) -> Unit,
     onClear: (LocalDate, LocalDate) -> Unit,
 ) {
-    val state = rememberDateRangePickerState(initialDisplayedMonthMillis = monthMillis)
+    val span = remember(date, allMarks) { menstruationSpanContaining(date, allMarks) }
+    val monthMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+    val state = rememberDateRangePickerState(
+        initialDisplayedMonthMillis = monthMillis,
+        initialSelectedStartDateMillis = span?.first?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli(),
+        initialSelectedEndDateMillis = span?.second?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli(),
+    )
     val startMillis = state.selectedStartDateMillis
     val endMillis = state.selectedEndDateMillis
     val ready = startMillis != null
@@ -176,6 +187,7 @@ private fun MenstruationPeriodDialog(
                             color = Palette.inkSoft,
                         )
                     },
+                    headline = {},
                 )
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
@@ -219,44 +231,6 @@ private fun menstruationRange(startMillis: Long, endMillis: Long?): Pair<LocalDa
         Instant.ofEpochMilli(endMillis).atZone(ZoneOffset.UTC).toLocalDate()
     }
     return if (start.isAfter(end)) end to start else start to end
-}
-
-@Composable
-private fun MarkCircle(
-    title: String,
-    value: String,
-    filled: Boolean,
-    caption: String,
-    onClick: () -> Unit,
-) {
-    Column(
-        Modifier.clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            Modifier
-                .size(68.dp)
-                .then(if (filled) Modifier.border(1.5.dp, Palette.accent, CircleShape) else Modifier)
-                .background(if (filled) Palette.surface else Palette.placeholder, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                value,
-                fontSize = if (value == "+") 28.sp else 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (filled) Palette.accent else Palette.ink,
-                textAlign = TextAlign.Center,
-            )
-        }
-        Text(
-            title,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = Palette.ink,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        Text(caption, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted)
-    }
 }
 
 @Composable

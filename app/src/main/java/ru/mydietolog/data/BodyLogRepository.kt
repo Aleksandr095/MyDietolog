@@ -54,8 +54,9 @@ class BodyLogRepository(context: Context) {
         }
     }
 
-    suspend fun setSemavik(date: LocalDate, semavikMg: Double?) {
-        update(date) { it.copy(semavikMg = semavikMg.accepted()) }
+    suspend fun setSemavik(date: LocalDate, semavikMg: Double?, frequency: String?) {
+        val freq = frequency?.trim()?.takeIf { it.isNotEmpty() }
+        update(date) { it.copy(semavikMg = semavikMg.accepted(), semavikFrequency = freq) }
     }
 
     private suspend fun update(date: LocalDate, change: (BodyLog) -> BodyLog) {
