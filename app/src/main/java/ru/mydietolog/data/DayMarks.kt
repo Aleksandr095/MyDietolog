@@ -38,3 +38,14 @@ fun Iterable<Int?>.averageOrNull(): Average? {
     val values = mapNotNull { it }
     return if (values.isEmpty()) null else Average(values.average(), values.size)
 }
+
+/** Непрерывный участок с menstruation == true, в который входит [date], или null. */
+fun menstruationSpanContaining(date: LocalDate, marks: List<DayMarks>): Pair<LocalDate, LocalDate>? {
+    val byDate = marks.associate { it.date to it.menstruation }
+    if (byDate[date] != true) return null
+    var start = date
+    while (byDate[start.minusDays(1)] == true) start = start.minusDays(1)
+    var end = date
+    while (byDate[end.plusDays(1)] == true) end = end.plusDays(1)
+    return start to end
+}

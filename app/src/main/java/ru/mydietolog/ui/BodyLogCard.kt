@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,7 +43,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-private enum class BodyDateTarget { WEIGHT, MEASURES, SEMAVIK }
+private enum class BodySection { WEIGHT, MEASURES, SEMAVIK }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,35 +52,36 @@ fun BodyLogCard(
     entries: List<BodyLog>,
     onSaveWeight: (LocalDate, Double?) -> Unit,
     onSaveMeasurements: (LocalDate, Double?, Double?, Double?, Double?, Double?) -> Unit,
-    onSaveSemavik: (LocalDate, Double?) -> Unit,
+    onSaveSemavik: (LocalDate, Double?, String?) -> Unit,
 ) {
-    val weight = remember {
-        WeightFields(selectedDate, entries.firstOrNull { it.date == selectedDate }?.weightKg)
-    }
-    val measures = remember {
-        MeasureFields(selectedDate, entries.firstOrNull { it.date == selectedDate })
-    }
-    val semavik = remember {
-        SemavikFields(selectedDate, entries.firstOrNull { it.date == selectedDate }?.semavikMg)
-    }
-    var picking by remember { mutableStateOf<BodyDateTarget?>(null) }
+    val today = entries.firstOrNull { it.date == selectedDate }
+    var section by remember { mutableStateOf<BodySection?>(null) }
+    val weight = remember { WeightFields(selectedDate, today?.weightKg) }
+    val measures = remember { MeasureFields(selectedDate, today) }
+    val semavik = remember { SemavikFields(selectedDate, today) }
+    var picking by remember { mutableStateOf<BodySection?>(null) }
 
     fun saved(date: LocalDate) = entries.firstOrNull { it.date == date }
 
     LaunchedEffect(selectedDate) {
+        section = null
         picking = null
         weight.date = selectedDate
         weight.kilograms.show(saved(selectedDate)?.weightKg, force = true)
         measures.date = selectedDate
         measures.show(saved(selectedDate), force = true)
         semavik.date = selectedDate
-        semavik.dose.show(saved(selectedDate)?.semavikMg, force = true)
+        semavik.show(saved(selectedDate), force = true)
     }
     LaunchedEffect(entries) {
         weight.kilograms.show(saved(weight.date)?.weightKg, force = false)
         measures.show(saved(measures.date), force = false)
-        semavik.dose.show(saved(semavik.date)?.semavikMg, force = false)
+        semavik.show(saved(semavik.date), force = false)
     }
+
+    val weightLabel = today?.weightKg?.let { formatBodyNumber(it) }
+    val measureCount = today?.measureCount() ?: 0
+    val doseLabel = today?.semavikMg?.let { formatBodyNumber(it) }
 
     val shape = RoundedCornerShape(22.dp)
     Column(
@@ -89,120 +90,156 @@ fun BodyLogCard(
             .clip(shape)
             .background(Palette.surface)
             .border(1.dp, Palette.line, shape)
-            .padding(horizontal = 12.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+            .padding(horizontal = 8.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
             "Вес, замеры, Семавик",
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             color = Palette.muted,
+            modifier = Modifier.padding(start = 8.dp),
         )
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SectionTitle("Вес")
-            DateField("Дата", weight.date) { picking = BodyDateTarget.WEIGHT }
-            DecimalField("Килограммы", weight.kilograms.text) { weight.kilograms.text = it }
-            SaveButton(enabled = inputsValid(weight.kilograms.text)) {
-                when (val parsed = parseBodyNumber(weight.kilograms.text)) {
-                    ParsedNumber.Invalid -> Unit
-                    ParsedNumber.Empty -> {
-                        weight.kilograms.commit("")
-                        onSaveWeight(weight.date, null)
-                    }
-                    is ParsedNumber.Ok -> {
-                        weight.kilograms.commit(formatBodyNumber(parsed.number))
-                        onSaveWeight(weight.date, parsed.number)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            MarkCircle(
+                title = "Вес",
+                value = weightLabel ?: "+",
+                filled = today?.hasWeight() == true,
+                caption = weightLabel?.let { "$it кг" } ?: "Добавить",
+                onClick = { section = if (section == BodySection.WEIGHT) null else BodySection.WEIGHT },
+            )
+            MarkCircle(
+                title = "Замеры",
+                value = if (measureCount > 0) measureCount.toString() else "+",
+                filled = today?.hasMeasures() == true,
+                caption = if (measureCount > 0) "$measureCount из 5" else "Добавить",
+                onClick = { section = if (section == BodySection.MEASURES) null else BodySection.MEASURES },
+            )
+            MarkCircle(
+                title = "Семавик",
+                value = doseLabel ?: "+",
+                filled = today?.hasSemavik() == true,
+                showCheck = today?.hasSemavik() == true && doseLabel == null,
+                caption = semavikCaption(today) ?: "Добавить",
+                onClick = { section = if (section == BodySection.SEMAVIK) null else BodySection.SEMAVIK },
+            )
+        }
+        when (section) {
+            BodySection.WEIGHT -> Column(
+                Modifier.padding(horizontal = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                DateField("Дата", weight.date) { picking = BodySection.WEIGHT }
+                DecimalField("Килограммы", weight.kilograms.text) { weight.kilograms.text = it }
+                SaveButton(enabled = inputsValid(weight.kilograms.text)) {
+                    when (val parsed = parseBodyNumber(weight.kilograms.text)) {
+                        ParsedNumber.Invalid -> Unit
+                        ParsedNumber.Empty -> {
+                            weight.kilograms.commit("")
+                            onSaveWeight(weight.date, null)
+                        }
+                        is ParsedNumber.Ok -> {
+                            weight.kilograms.commit(formatBodyNumber(parsed.number))
+                            onSaveWeight(weight.date, parsed.number)
+                        }
                     }
                 }
             }
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SectionTitle("Замеры")
-            Text(
-                "В сантиметрах",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Palette.muted,
-            )
-            DateField("Дата", measures.date) { picking = BodyDateTarget.MEASURES }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DecimalField("Талия", measures.waist.text, Modifier.weight(1f)) { measures.waist.text = it }
-                DecimalField("Бёдра", measures.hips.text, Modifier.weight(1f)) { measures.hips.text = it }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DecimalField("Грудь", measures.chest.text, Modifier.weight(1f)) { measures.chest.text = it }
-                DecimalField("Бедро", measures.thigh.text, Modifier.weight(1f)) { measures.thigh.text = it }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DecimalField("Рука", measures.arm.text, Modifier.weight(1f)) { measures.arm.text = it }
-                Spacer(Modifier.weight(1f))
-            }
-            val measuresValid = inputsValid(
-                measures.waist.text,
-                measures.hips.text,
-                measures.chest.text,
-                measures.thigh.text,
-                measures.arm.text,
-            )
-            SaveButton(enabled = measuresValid) {
-                val fields = listOf(measures.waist, measures.hips, measures.chest, measures.thigh, measures.arm)
-                val parsed = fields.map { parseBodyNumber(it.text) }
-                if (parsed.any { it is ParsedNumber.Invalid }) return@SaveButton
-                val numbers = parsed.map { (it as? ParsedNumber.Ok)?.number }
-                fields.forEachIndexed { index, field -> field.commit(formatBodyNumber(numbers[index])) }
-                onSaveMeasurements(
-                    measures.date,
-                    numbers[0],
-                    numbers[1],
-                    numbers[2],
-                    numbers[3],
-                    numbers[4],
+            BodySection.MEASURES -> Column(
+                Modifier.padding(horizontal = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    "В сантиметрах",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Palette.muted,
                 )
-            }
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SectionTitle("Семавик")
-            DateField("Дата приёма", semavik.date) { picking = BodyDateTarget.SEMAVIK }
-            DecimalField("Дозировка, мг", semavik.dose.text) { semavik.dose.text = it }
-            SaveButton(enabled = inputsValid(semavik.dose.text)) {
-                when (val parsed = parseBodyNumber(semavik.dose.text)) {
-                    ParsedNumber.Invalid -> Unit
-                    ParsedNumber.Empty -> {
-                        semavik.dose.commit("")
-                        onSaveSemavik(semavik.date, null)
-                    }
-                    is ParsedNumber.Ok -> {
-                        semavik.dose.commit(formatBodyNumber(parsed.number))
-                        onSaveSemavik(semavik.date, parsed.number)
-                    }
+                DateField("Дата", measures.date) { picking = BodySection.MEASURES }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DecimalField("Талия", measures.waist.text, Modifier.weight(1f)) { measures.waist.text = it }
+                    DecimalField("Бёдра", measures.hips.text, Modifier.weight(1f)) { measures.hips.text = it }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DecimalField("Грудь", measures.chest.text, Modifier.weight(1f)) { measures.chest.text = it }
+                    DecimalField("Бедро", measures.thigh.text, Modifier.weight(1f)) { measures.thigh.text = it }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DecimalField("Рука", measures.arm.text, Modifier.weight(1f)) { measures.arm.text = it }
+                    Spacer(Modifier.weight(1f))
+                }
+                val measuresValid = inputsValid(
+                    measures.waist.text,
+                    measures.hips.text,
+                    measures.chest.text,
+                    measures.thigh.text,
+                    measures.arm.text,
+                )
+                SaveButton(enabled = measuresValid) {
+                    val fields = listOf(measures.waist, measures.hips, measures.chest, measures.thigh, measures.arm)
+                    val parsed = fields.map { parseBodyNumber(it.text) }
+                    if (parsed.any { it is ParsedNumber.Invalid }) return@SaveButton
+                    val numbers = parsed.map { (it as? ParsedNumber.Ok)?.number }
+                    fields.forEachIndexed { index, field -> field.commit(formatBodyNumber(numbers[index])) }
+                    onSaveMeasurements(
+                        measures.date,
+                        numbers[0],
+                        numbers[1],
+                        numbers[2],
+                        numbers[3],
+                        numbers[4],
+                    )
                 }
             }
+            BodySection.SEMAVIK -> Column(
+                Modifier.padding(horizontal = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                DateField("Дата изменения дозировки", semavik.date) { picking = BodySection.SEMAVIK }
+                DecimalField("Дозировка, мг", semavik.dose.text) { semavik.dose.text = it }
+                TextField("Частота приёма", semavik.frequency.text) { semavik.frequency.text = it }
+                val semavikValid = inputsValid(semavik.dose.text)
+                SaveButton(enabled = semavikValid) {
+                    val doseParsed = parseBodyNumber(semavik.dose.text)
+                    if (doseParsed is ParsedNumber.Invalid) return@SaveButton
+                    val dose = (doseParsed as? ParsedNumber.Ok)?.number
+                    val freq = semavik.frequency.text.trim().takeIf { it.isNotEmpty() }
+                    when (doseParsed) {
+                        ParsedNumber.Empty -> semavik.dose.commit("")
+                        is ParsedNumber.Ok -> semavik.dose.commit(formatBodyNumber(doseParsed.number))
+                        ParsedNumber.Invalid -> Unit
+                    }
+                    semavik.frequency.commit(freq.orEmpty())
+                    onSaveSemavik(semavik.date, dose, freq)
+                }
+            }
+            null -> Unit
         }
     }
 
     val target = picking
     if (target != null) {
         val initial = when (target) {
-            BodyDateTarget.WEIGHT -> weight.date
-            BodyDateTarget.MEASURES -> measures.date
-            BodyDateTarget.SEMAVIK -> semavik.date
+            BodySection.WEIGHT -> weight.date
+            BodySection.MEASURES -> measures.date
+            BodySection.SEMAVIK -> semavik.date
         }
         BodyDateDialog(
             initial = initial,
             onDismiss = { picking = null },
             onPick = { picked ->
                 when (target) {
-                    BodyDateTarget.WEIGHT -> {
+                    BodySection.WEIGHT -> {
                         weight.date = picked
                         weight.kilograms.show(saved(picked)?.weightKg, force = true)
                     }
-                    BodyDateTarget.MEASURES -> {
+                    BodySection.MEASURES -> {
                         measures.date = picked
                         measures.show(saved(picked), force = true)
                     }
-                    BodyDateTarget.SEMAVIK -> {
+                    BodySection.SEMAVIK -> {
                         semavik.date = picked
-                        semavik.dose.show(saved(picked)?.semavikMg, force = true)
+                        semavik.show(saved(picked), force = true)
                     }
                 }
                 picking = null
@@ -211,9 +248,13 @@ fun BodyLogCard(
     }
 }
 
-@Composable
-private fun SectionTitle(text: String) {
-    Text(text, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Palette.ink)
+private fun semavikCaption(entry: BodyLog?): String? {
+    if (entry == null || !entry.hasSemavik()) return null
+    val parts = buildList {
+        entry.semavikMg?.let { add("${formatBodyNumber(it)} мг") }
+        entry.semavikFrequency?.let { add(it) }
+    }
+    return parts.joinToString(" · ")
 }
 
 @Composable
@@ -268,7 +309,7 @@ private fun DecimalField(
     onValue: (String) -> Unit,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted, maxLines = 1)
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted, maxLines = 2)
         OutlinedTextField(
             value = value,
             onValueChange = { raw ->
@@ -277,6 +318,27 @@ private fun DecimalField(
             placeholder = { Text("—") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            textStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold),
+            shape = RoundedCornerShape(10.dp),
+            colors = appFieldColors(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun TextField(
+    label: String,
+    value: String,
+    onValue: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Palette.muted)
+        OutlinedTextField(
+            value = value,
+            onValueChange = { onValue(it.take(48)) },
+            placeholder = { Text("например, раз в неделю") },
+            singleLine = true,
             textStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold),
             shape = RoundedCornerShape(10.dp),
             colors = appFieldColors(),
@@ -334,6 +396,23 @@ private class NumberField(initial: Double?) {
     }
 }
 
+private class TextEntry(initial: String?) {
+    var text by mutableStateOf(initial.orEmpty())
+    private var baseline = text
+
+    fun show(value: String?, force: Boolean) {
+        val formatted = value.orEmpty()
+        if (!force && text != baseline) return
+        text = formatted
+        baseline = formatted
+    }
+
+    fun commit(formatted: String) {
+        text = formatted
+        baseline = formatted
+    }
+}
+
 private class WeightFields(date: LocalDate, kilograms: Double?) {
     var date by mutableStateOf(date)
     val kilograms = NumberField(kilograms)
@@ -356,9 +435,15 @@ private class MeasureFields(date: LocalDate, entry: BodyLog?) {
     }
 }
 
-private class SemavikFields(date: LocalDate, dose: Double?) {
+private class SemavikFields(date: LocalDate, entry: BodyLog?) {
     var date by mutableStateOf(date)
-    val dose = NumberField(dose)
+    val dose = NumberField(entry?.semavikMg)
+    val frequency = TextEntry(entry?.semavikFrequency)
+
+    fun show(entry: BodyLog?, force: Boolean) {
+        dose.show(entry?.semavikMg, force)
+        frequency.show(entry?.semavikFrequency, force)
+    }
 }
 
 private sealed interface ParsedNumber {
